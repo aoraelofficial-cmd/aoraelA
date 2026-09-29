@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>양자회담 관리</title>
+<title>AOREAL Project Management</title>
 <style>
 :root{--bg:#f2f4f3;--pn:#fff;--ink:#15232b;--mut:#667780;--ln:#d9dfdd;--pri:#0f5c5a;--pri-t:#e0efee;--seal:#b3362f;--ok:#1d7a4d}
 @media(prefers-color-scheme:dark){:root{--bg:#0f171b;--pn:#162227;--ink:#e4ecea;--mut:#8fa2a8;--ln:#26363c;--pri:#4fb8b2;--pri-t:#173a3a;--seal:#e0665e;--ok:#5fc58f}}
@@ -138,7 +138,7 @@ async function api(m,p,b={}){
   }else if(r==='artifacts'){
     if(m==='POST'){db.artifacts.push({id:uid('art_'),meeting_id:b.meeting_id,kind:b.kind,version:1,lang:b.lang||'ko',title:b.title||'',body:b.body||'',status:'draft'});adv(b.meeting_id,b.kind)}
     else{
-      const a=need(db.artifacts.find(x=>x.id===id),'산출물을 찾을 수 없어요');
+      const a=need(db.artifacts.find(x=>x.id===id),'아웃풋을 찾을 수 없어요');
       if(m==='PATCH'){setF(a,b,['title','body','status','lang','version']);adv(a.meeting_id,a.kind)}else del('artifacts',x=>x.id===id);
     }
   }else if(r==='actions'){
@@ -377,8 +377,8 @@ const H={
     const body=await gem(`다음 텍스트를 ${name}로 번역하세요. 외교/공식 문서 어조를 유지하고, 번역 결과만 출력하세요 (설명이나 원문 반복 금지).\n\n---\n${text}`,.2);
     await saveArt({kind:d.dataset.kind,title:`${d.querySelector('.a-t').value||'문서'} (${name} 번역)`,body,lang:sel.value});await openSet(cur);return '번역본을 저장했어요';
   },
-  async adel(t,d){if(!confirm('이 산출물을 삭제할까요?'))return;await api('DELETE','/api/artifacts/'+d.dataset.id);await openSet(cur);return '삭제했어요'},
-  async newart(){await api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind:v('n-kind'),title:v('n-title'),body:$('#n-body').value});await reload();return '산출물을 추가했어요'},
+  async adel(t,d){if(!confirm('이 아웃풋을 삭제할까요?'))return;await api('DELETE','/api/artifacts/'+d.dataset.id);await openSet(cur);return '삭제했어요'},
+  async newart(){await api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind:v('n-kind'),title:v('n-title'),body:$('#n-body').value});await reload();return '아웃풋을 추가했어요'},
   async actsave(t,d){const id=d.dataset.id,box=d.closest('.action-edit');await api('PATCH','/api/actions/'+id,{category:box.querySelector('.x-cat').value,owner:box.querySelector('.x-owner').value,due_on:box.querySelector('.x-due').value,description:box.querySelector('.x-desc').value,status:box.querySelector('.x-status').value,description_en:box.querySelector('.x-en').value});await openSet(cur);return '후속조치를 저장했어요'},
   async acttranslate(t,d){const box=d.closest('.action-edit'),ta=box.querySelector('.x-desc');if(!ta.value.trim())throw new Error('번역할 내용을 입력하세요');box.querySelector('.x-en').value=await gem(`Translate the following follow-up action into clear professional English. Return only the translation.\\n\\n${ta.value}`,.2);return '영문 번역을 입력했어요. 저장을 눌러 반영하세요'},
   async actdel(t,d){if(!confirm('이 후속조치를 삭제할까요?'))return;await api('DELETE','/api/actions/'+d.dataset.id);await openSet(cur);return '삭제했어요'},
