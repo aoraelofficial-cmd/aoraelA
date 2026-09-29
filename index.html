@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>양자회담 관리</title>
+<style>
+:root{--bg:#f2f4f3;--pn:#fff;--ink:#15232b;--mut:#667780;--ln:#d9dfdd;--pri:#0f5c5a;--pri-t:#e0efee;--seal:#b3362f;--ok:#1d7a4d}
+@media(prefers-color-scheme:dark){:root{--bg:#0f171b;--pn:#162227;--ink:#e4ecea;--mut:#8fa2a8;--ln:#26363c;--pri:#4fb8b2;--pri-t:#173a3a;--seal:#e0665e;--ok:#5fc58f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:10px;padding:12px 20px;background:var(--pn);border-bottom:1px solid var(--ln)}
+header h1{font-size:17px;margin:0;flex:1}
+#dot{width:9px;height:9px;border-radius:50%;background:var(--mut)}#dot.ok{background:var(--ok)}#dot.bad{background:var(--seal)}
+#apiTxt{color:var(--mut);font-size:13px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrap{display:grid;grid-template-columns:290px 1fr;min-height:calc(100vh - 54px)}
+aside{border-right:1px solid var(--ln);background:var(--pn)}
+.ah{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--ln)}
+.ri{display:block;padding:12px 16px;border-bottom:1px solid var(--ln);border-left:3px solid transparent;color:inherit;text-decoration:none}
+.ri.on{background:var(--pri-t);border-left-color:var(--pri)}
+.ri b{display:block}.ri span,.ri small{display:block;color:var(--mut);font-size:13px}
+.bar{display:flex;gap:2px;margin:6px 0 3px}.bar u{flex:1;height:4px;background:var(--ln)}.bar u.on{background:var(--pri)}
+main{padding:24px 28px;min-width:0}
+h2{margin:0;font-size:22px}h3{font-size:15px;margin:0 0 12px}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.top p{margin:2px 0 0;color:var(--mut)}
+.steps{list-style:none;display:flex;padding:0;margin:20px 0;overflow-x:auto}
+.steps li{flex:1;min-width:74px;text-align:center;position:relative}
+.steps li:not(:last-child)::after{content:"";position:absolute;top:15px;left:50%;width:100%;height:2px;background:var(--ln)}
+.steps li.done:not(:last-child)::after{background:var(--pri)}
+.step{position:relative;z-index:1;background:none;border:0;font:inherit;font-size:12px;color:var(--mut);cursor:pointer;padding:0}
+.step b{display:grid;place-items:center;width:30px;height:30px;margin:0 auto 4px;border-radius:50%;background:var(--pn);border:2px solid var(--ln);font-size:13px;color:var(--ink)}
+.done .step b{background:var(--pri);border-color:var(--pri);color:var(--bg)}
+.cur .step b{border-color:var(--pri);box-shadow:0 0 0 4px var(--pri-t)}
+.cur .step{color:var(--ink);font-weight:600}
+.gate .step b{border-color:var(--seal);border-radius:7px}
+.step:disabled{cursor:not-allowed}
+.seal{display:flex;flex-wrap:wrap;gap:12px;align-items:center;border:1.5px solid var(--seal);border-radius:6px;padding:14px 16px;margin-bottom:18px}
+.seal>div{flex:1;min-width:220px}.seal p{margin:2px 0 0;font-size:13px;color:var(--mut)}.seal input{width:160px;margin:0}
+.btn{font:inherit;font-size:14px;padding:7px 13px;border:1px solid var(--ln);background:var(--pn);color:var(--ink);border-radius:6px;cursor:pointer}
+.btn:hover{border-color:var(--pri)}.btn.pri{background:var(--pri);border-color:var(--pri);color:var(--bg)}
+.btn.sm{padding:4px 9px;font-size:13px}.btn.danger{color:var(--seal)}
+.btn.stamp{background:var(--seal);border-color:var(--seal);color:#fff;font-weight:600}
+:is(.btn,input,textarea,select,.step,.ri,.tabs button,summary):focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+label{display:block;font-size:13px;color:var(--mut);margin:0 0 10px}
+input,textarea,select{display:block;width:100%;margin-top:3px;padding:8px 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--pn);border:1px solid var(--ln);border-radius:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row.end{justify-content:flex-end}
+.row input,.row select{width:auto;flex:1;min-width:110px;margin:0}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--ln);margin-bottom:18px;overflow-x:auto}
+.tabs button{font:inherit;background:none;border:0;padding:9px 14px;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--pri);font-weight:600}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+.item{border-top:1px solid var(--ln);padding:10px 0;display:flex;gap:10px;align-items:flex-start}
+.item>div{flex:1;min-width:0}.item small{color:var(--mut)}
+details.art{border:1px solid var(--ln);border-radius:6px;margin-bottom:8px;background:var(--pn)}
+details.art>summary{padding:10px 14px;cursor:pointer}.art .in{padding:0 14px 14px}
+.tag{font-size:12px;padding:1px 8px;border-radius:9px;background:var(--pri-t);color:var(--pri);margin-left:6px}
+.tag.approved{background:var(--ok);color:var(--bg)}
+.tool{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.tool input{flex:1;min-width:200px;margin:0}
+details.src{margin-bottom:14px}details.src summary{cursor:pointer;color:var(--pri);margin-bottom:8px}
+.hint{color:var(--mut);font-size:13px}.empty{color:var(--mut);padding:36px 0}
+dialog{border:1px solid var(--ln);border-radius:8px;background:var(--pn);color:var(--ink);width:min(460px,92vw);padding:20px}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;z-index:9}
+#toast.on{opacity:1}#toast.err{background:var(--seal);color:#fff}
+#busy{position:fixed;top:0;left:0;height:3px;width:100%;background:var(--pri);display:none;z-index:9}#busy.on{display:block}
+@media(max-width:800px){.wrap{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--ln)}main{padding:16px}.cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>양자회담 관리</h1><span id="dot"></span><span id="apiTxt">확인 중</span><button class="btn sm" data-a="settings">API 설정</button></header>
+<div class="wrap">
+<aside><div class="ah"><b>회의 세트</b><button class="btn pri sm" data-a="newset">새 세트</button></div><div id="rail"></div></aside>
+<main id="main"></main>
+</div>
+<dialog id="dlg"></dialog><div id="toast"></div><div id="busy"></div>
+<script>
+const $=s=>document.querySelector(s),main=$('#main'),dlg=$('#dlg');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const v=id=>($('#'+id)?.value||'').trim();
+const KIND={agenda:'아젠다',minutes:'회의록',minutes_a:'회의록 전문(A)',minutes_b:'경영진 요약(B)',email:'이메일 문안'};
+let cfg={base:'',actor:''},sets=[],D=null,cur=null,tab='info';
+try{Object.assign(cfg,JSON.parse(localStorage.getItem('mtg_cfg')||'{}'))}catch(e){}
+const saveCfg=()=>{try{localStorage.setItem('mtg_cfg',JSON.stringify(cfg))}catch(e){}};
+
+async function api(m,p,b){
+  let r;
+  try{r=await fetch(cfg.base+p,{method:m,headers:b?{'content-type':'application/json'}:{},body:b?JSON.stringify(b):undefined})}
+  catch(e){throw new Error('API에 연결할 수 없어요. 주소를 확인하세요.')}
+  let j;try{j=await r.json()}catch(e){throw new Error('서버 응답을 읽을 수 없어요 (HTTP '+r.status+')')}
+  if(!j.ok)throw new Error(j.error||'요청에 실패했어요');
+  return j.data;
+}
+function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(toast.h);toast.h=setTimeout(()=>t.className='',err?5000:2200)}
+async function run(fn){$('#busy').className='on';try{const m=await fn();if(m)toast(m)}catch(e){toast(e.message,1)}finally{$('#busy').className=''}}
+async function ping(){
+  try{await api('GET','/api/health');$('#dot').className='ok';$('#apiTxt').textContent=cfg.base||'현재 주소';return true}
+  catch(e){$('#dot').className='bad';$('#apiTxt').textContent='연결 안 됨';return false}
+}
+async function loadSets(){sets=await api('GET','/api/sets');renderRail()}
+async function open(id){cur=id;D=await api('GET','/api/sets/'+encodeURIComponent(id));render()}
+const reload=async()=>{await loadSets();if(cur)await open(cur)};
+async function route(){const id=decodeURIComponent(location.hash.slice(2));if(id)await open(id);else{cur=null;D=null;render()}}
+addEventListener('hashchange',()=>run(route));
+
+function renderRail(){
+  $('#rail').innerHTML=sets.length?sets.map(s=>`<a class="ri ${s.id===cur?'on':''}" href="#/${encodeURIComponent(s.id)}"><b>${esc(s.code)} ${esc(s.title||'')}</b><span>${esc(s.org_name)}</span><i class="bar">${Array.from({length:10},(_,i)=>`<u class="${i<s.stage?'on':''}"></u>`).join('')}</i><small>${s.stage}단계 ${esc(s.stage_label||'')}${s.action_total?`, 후속조치 ${s.action_done}/${s.action_total}`:''}</small></a>`).join(''):'<p class="empty" style="padding:16px">아직 세트가 없어요. 새 세트로 시작하세요.</p>';
+}
+const fld=(id,l,val,ph='')=>`<label>${l}<input id="${id}" value="${esc(val)}" placeholder="${ph}"></label>`;
+
+function render(){
+  const openIds=[...document.querySelectorAll('details[data-id][open]')].map(d=>d.dataset.id);
+  renderRail();
+  if(!D){main.innerHTML='<div class="empty"><h3>회의 세트를 선택하세요</h3><p>왼쪽 목록에서 세트를 고르거나, 새 세트를 만들어 시작하세요.</p></div>';return}
+  const s=D.set;
+  const tabs=[['info','개요'],['art',`산출물 ${D.artifacts.length}`],['act',`후속조치 ${D.actions.length}`],['fp','발자취']];
+  main.innerHTML=`<div class="top"><div><h2>${esc(s.code)} ${esc(s.title||'')}</h2><p>${esc(s.org_name)}${s.org_country?' ('+esc(s.org_country)+')':''}</p></div><button class="btn sm danger" data-a="delset">세트 삭제</button></div>
+  <ol class="steps">${D.stages.map(x=>`<li class="${x.n<s.stage?'done':''} ${x.n==s.stage?'cur':''} ${x.gate?'gate':''}"><button class="step" data-a="stage" data-n="${x.n}" ${x.n==7||x.n==8?'disabled':''} title="${esc(x.desc)}"><b>${x.n}</b>${esc(x.label)}</button></li>`).join('')}</ol>
+  ${s.stage===7?`<div class="seal"><div><b>대표 승인 대기</b><p>회의록, 아젠다, 발송 문안을 검토한 뒤 승인하면 참석자 배포 단계로 넘어가요.</p></div><input id="actor" value="${esc(cfg.actor)}" placeholder="승인자 이름"><button class="btn stamp" data-a="approve">승인하기</button></div>`:''}
+  ${s.approved_by?`<p class="hint">승인: ${esc(s.approved_by)} (${esc(s.approved_at||'')})</p>`:''}
+  <nav class="tabs">${tabs.map(t=>`<button class="${t[0]===tab?'on':''}" data-a="tab" data-t="${t[0]}">${t[1]}</button>`).join('')}</nav>
+  <section>${{info:paneInfo,art:paneArt,act:paneAct,fp:paneFp}[tab]()}</section>`;
+  openIds.forEach(i=>{const d=main.querySelector(`details[data-id="${i}"]`);if(d)d.open=true});
+}
+
+function paneInfo(){
+  const s=D.set,side=k=>D.attendees.filter(a=>a.side===k);
+  const grp=(k,l)=>`<p class="hint" style="margin:10px 0 0">${l}</p>${side(k).map(a=>`<div class="item"><div><b>${esc(a.name)}</b> <small>${esc(a.title||'')}</small><br><small>${esc(a.email||'')}</small></div><button class="btn sm danger" data-a="delatt" data-c="${a.contact_id}">삭제</button></div>`).join('')||'<p class="hint">없음</p>'}`;
+  return `<div class="cols"><div><h3>회의 정보</h3>
+  ${fld('m-at','일시',s.scheduled_at,'2026-10-05 14:00')}${fld('m-mode','방식',s.mode,'video 또는 onsite')}${fld('m-venue','장소',s.venue)}${fld('m-platform','화상 플랫폼',s.platform)}${fld('m-url','접속 링크 (입력한 경우에만 저장)','')}
+  <label>목적<textarea id="m-purpose" rows="3">${esc(s.purpose)}</textarea></label><button class="btn pri" data-a="savem">저장</button></div>
+  <div><h3>참석자</h3>${grp('korea','우리측')}${grp('partner','상대측')}
+  <div class="row" style="margin-top:12px"><input id="p-name" placeholder="이름"><input id="p-title" placeholder="직함"></div>
+  <div class="row" style="margin-top:8px"><input id="p-email" placeholder="이메일"><select id="p-side"><option value="korea">우리측</option><option value="partner">상대측</option></select><button class="btn" data-a="addatt">추가</button></div></div></div>`;
+}
+function paneArt(){
+  const langs=[['en','English'],['vi','Tiếng Việt'],['ja','日本語'],['zh','中文'],['fr','Français'],['de','Deutsch']];
+  return `<div class="tool"><input id="ins" placeholder="AI에게 줄 추가 지시사항 (선택)"><button class="btn" data-a="aiagenda">아젠다 초안 만들기</button><button class="btn" data-a="aiab" data-doc="a">회의록 전문(A)</button><button class="btn" data-a="aiab" data-doc="b">경영진 요약(B)</button></div>
+  <details class="src"><summary>회의 기록 텍스트로 회의록 정리하기</summary><textarea id="src" rows="6" placeholder="회의 중 메모나 전사 내용을 붙여 넣으세요"></textarea><button class="btn" style="margin-top:8px" data-a="aimin">회의록 만들기</button></details>
+  ${D.artifacts.map(a=>`<details class="art" data-id="${a.id}" data-kind="${a.kind}"><summary>${esc(KIND[a.kind]||a.kind)} v${a.version}<span class="tag ${a.status}">${a.status==='approved'?'승인됨':'초안'}</span> ${esc(a.title||'')}</summary><div class="in">
+  <label>제목<input class="a-t" value="${esc(a.title)}"></label><label>내용<textarea class="a-b" rows="12">${esc(a.body)}</textarea></label>
+  <div class="row"><button class="btn pri" data-a="asave">저장</button>${a.kind==='agenda'||a.kind==='minutes'?'<button class="btn" data-a="acomp">AI로 초안 완성</button>':''}<select class="a-l">${langs.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join('')}</select><button class="btn" data-a="atr">번역본 저장</button><button class="btn danger" data-a="adel">삭제</button></div></div></details>`).join('')||'<p class="empty">아직 산출물이 없어요. 위 버튼으로 AI 초안을 만들거나 아래에서 직접 추가하세요.</p>'}
+  <details class="art"><summary>산출물 직접 추가</summary><div class="in"><label>종류<select id="n-kind">${Object.entries(KIND).map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></label>${fld('n-title','제목','')}<label>내용<textarea id="n-body" rows="6"></textarea></label><button class="btn pri" data-a="newart">추가</button></div></details>`;
+}
+function paneAct(){
+  return `${D.actions.map(a=>`<div class="item"><div><b>${esc(a.description)}</b><br><small>${esc(a.category)}, 담당 ${esc(a.owner)}${a.due_on?', 기한 '+esc(a.due_on):''}</small></div><button class="btn sm" data-a="acttog" data-id="${a.id}" data-s="${a.status==='done'?'open':'done'}">${a.status==='done'?'완료됨(되돌리기)':'완료 처리'}</button><button class="btn sm danger" data-a="actdel" data-id="${a.id}">삭제</button></div>`).join('')||'<p class="empty">등록된 후속조치가 없어요.</p>'}
+  <h3 style="margin-top:20px">후속조치 추가</h3><div class="row"><input id="x-cat" placeholder="구분"><input id="x-owner" placeholder="담당"><input id="x-due" placeholder="기한 2026-10-31"></div>
+  <div class="row" style="margin-top:8px"><input id="x-desc" placeholder="내용"><button class="btn pri" data-a="actadd">추가</button></div>`;
+}
+function paneFp(){
+  return `${D.footprint.map(f=>`<div class="item"><div><b>${esc(f.title||'')}</b> <small>${esc(f.occurred_on||'')}</small><br>${esc(f.one_liner)}</div><button class="btn sm danger" data-a="fpdel" data-id="${f.id}">삭제</button></div>`).join('')||'<p class="empty">이 기관과의 기록이 아직 없어요.</p>'}
+  <h3 style="margin-top:20px">기록 추가</h3><div class="row"><input id="f-on" placeholder="날짜 2026-09-28"><input id="f-title" placeholder="제목"></div>
+  <div class="row" style="margin-top:8px"><input id="f-one" placeholder="한 줄 요약"><button class="btn pri" data-a="fpadd">추가</button></div>`;
+}
+
+function openSettings(){
+  dlg.innerHTML=`<h3>API 설정</h3><label>API 주소<input id="c-base" value="${esc(cfg.base)}" placeholder="https://내-worker.workers.dev (비우면 현재 주소)"></label><label>승인자 이름<input id="c-actor" value="${esc(cfg.actor)}" placeholder="대표 승인 때 기록될 이름"></label><p class="hint" id="c-res">저장하면 바로 연결을 확인해요.</p><div class="row end"><button class="btn" data-x>닫기</button><button class="btn pri" data-a="savecfg">저장하고 연결</button></div>`;
+  dlg.showModal();
+}
+async function openNew(){
+  const orgs=await api('GET','/api/orgs');
+  dlg.innerHTML=`<h3>새 회의 세트</h3>${fld('n-id','세트 ID (영문, 숫자)','','예: aorael-1')}${fld('n-title','제목','')}
+  <label>기관<select id="n-org">${orgs.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}<option value="">새 기관 입력</option></select></label>
+  <div id="n-neworg" ${orgs.length?'hidden':''}>${fld('n-orgname','새 기관명','')}</div>${fld('n-at','일시','','2026-10-05 14:00')}${fld('n-venue','장소','')}
+  <label>목적<textarea id="n-purpose" rows="2"></textarea></label><div class="row end"><button class="btn" data-x>닫기</button><button class="btn pri" data-a="mkset">만들기</button></div>`;
+  dlg.showModal();const sel=$('#n-org');sel.onchange=()=>$('#n-neworg').hidden=!!sel.value;
+}
+
+const H={
+  settings:async()=>openSettings(),
+  newset:openNew,
+  async savecfg(){
+    let b=v('c-base').replace(/\/+$/,'');if(b&&!/^https?:\/\//.test(b))b='https://'+b;
+    cfg.base=b;cfg.actor=v('c-actor');saveCfg();
+    if(await ping()){dlg.close();await loadSets();await route();return 'API에 연결했어요'}
+    $('#c-res').textContent='연결하지 못했어요. 주소와 Worker 배포 상태를 확인하세요.';
+  },
+  async mkset(){
+    const id=v('n-id');if(!id)throw new Error('세트 ID를 입력하세요');
+    const oid=v('n-org'),b={id,title:v('n-title'),scheduled_at:v('n-at'),venue:v('n-venue'),purpose:v('n-purpose')};
+    if(oid)b.org_id=oid;else{if(!v('n-orgname'))throw new Error('기관명을 입력하세요');b.org_name=v('n-orgname')}
+    await api('POST','/api/sets',b);dlg.close();await loadSets();location.hash='#/'+encodeURIComponent(id);return '세트를 만들었어요';
+  },
+  async delset(){if(!confirm('이 세트와 딸린 산출물, 후속조치를 모두 삭제할까요?'))return;await api('DELETE','/api/sets/'+cur);location.hash='';cur=null;D=null;await loadSets();render();return '세트를 삭제했어요'},
+  tab(t){tab=t.dataset.t;render()},
+  async stage(t){await api('PATCH','/api/meetings/'+D.set.meeting_id,{stage:+t.dataset.n});await reload();return '단계를 바꿨어요'},
+  async approve(){
+    const actor=v('actor')||'대표';if(!confirm(actor+' 이름으로 승인할까요? 승인하면 8단계(참석자 배포)로 넘어가요.'))return;
+    cfg.actor=actor;saveCfg();await api('POST',`/api/meetings/${D.set.meeting_id}/approve`,{actor});await reload();return '승인했어요';
+  },
+  async savem(){
+    const b={scheduled_at:v('m-at'),mode:v('m-mode'),venue:v('m-venue'),platform:v('m-platform'),purpose:v('m-purpose')};
+    if(v('m-url'))b.join_url=v('m-url');
+    await api('PATCH','/api/meetings/'+D.set.meeting_id,b);await reload();return '회의 정보를 저장했어요';
+  },
+  async addatt(){
+    if(!v('p-name'))throw new Error('참석자 이름을 입력하세요');
+    await api('POST',`/api/meetings/${D.set.meeting_id}/attendees`,{side:v('p-side'),name:v('p-name'),title:v('p-title'),email:v('p-email')});await open(cur);return '참석자를 추가했어요';
+  },
+  async delatt(t){await api('DELETE',`/api/meetings/${D.set.meeting_id}/attendees/${t.dataset.c}`);await open(cur);return '참석자를 삭제했어요'},
+  async aiagenda(){await api('POST','/api/ai/agenda',{meeting_id:D.set.meeting_id,instructions:v('ins')});await reload();return '아젠다 초안을 만들었어요'},
+  async aiab(t){
+    const doc=t.dataset.doc,ex=D.artifacts.find(x=>x.kind==='minutes_'+doc);
+    await api('POST','/api/ai/minutes-ab',{meeting_id:D.set.meeting_id,doc,artifact_id:ex?.id});await open(cur);return '문서를 만들었어요';
+  },
+  async aimin(){
+    if(!v('src'))throw new Error('회의 기록 텍스트를 입력하세요');
+    await api('POST','/api/ai/minutes',{meeting_id:D.set.meeting_id,source:'text',text:$('#src').value,instructions:v('ins')});await reload();return '회의록을 만들었어요';
+  },
+  async asave(t,d){await api('PATCH','/api/artifacts/'+d.dataset.id,{title:d.querySelector('.a-t').value,body:d.querySelector('.a-b').value});await open(cur);return '저장했어요'},
+  async acomp(t,d){
+    await api('POST','/api/ai/complete',{meeting_id:D.set.meeting_id,kind:d.dataset.kind,draft:d.querySelector('.a-b').value,artifact_id:d.dataset.id,instructions:v('ins')});await reload();return 'AI로 초안을 완성했어요';
+  },
+  async atr(t,d){
+    await api('POST','/api/ai/translate',{text:d.querySelector('.a-b').value,target_lang:d.querySelector('.a-l').value,save_as_artifact:true,meeting_id:D.set.meeting_id,kind:d.dataset.kind,title:d.querySelector('.a-t').value});await open(cur);return '번역본을 저장했어요';
+  },
+  async adel(t,d){if(!confirm('이 산출물을 삭제할까요?'))return;await api('DELETE','/api/artifacts/'+d.dataset.id);await open(cur);return '삭제했어요'},
+  async newart(){await api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind:v('n-kind'),title:v('n-title'),body:$('#n-body').value});await reload();return '산출물을 추가했어요'},
+  async actadd(){
+    if(!v('x-desc'))throw new Error('후속조치 내용을 입력하세요');
+    await api('POST','/api/actions',{meeting_id:D.set.meeting_id,category:v('x-cat')||undefined,description:v('x-desc'),owner:v('x-owner')||undefined,due_on:v('x-due')||undefined});await reload();return '후속조치를 추가했어요';
+  },
+  async acttog(t){await api('PATCH','/api/actions/'+t.dataset.id,{status:t.dataset.s});await reload()},
+  async actdel(t){await api('DELETE','/api/actions/'+t.dataset.id);await reload();return '삭제했어요'},
+  async fpadd(){
+    if(!v('f-one'))throw new Error('한 줄 요약을 입력하세요');
+    await api('POST','/api/footprint',{org_id:D.set.org_id,meeting_id:D.set.meeting_id,occurred_on:v('f-on')||undefined,title:v('f-title'),one_liner:v('f-one')});await open(cur);return '기록을 추가했어요';
+  },
+  async fpdel(t){await api('DELETE','/api/footprint/'+t.dataset.id);await open(cur);return '삭제했어요'}
+};
+document.addEventListener('click',e=>{
+  if(e.target.closest('[data-x]'))return dlg.close();
+  const t=e.target.closest('[data-a]');if(!t||!H[t.dataset.a])return;
+  run(()=>H[t.dataset.a](t,t.closest('details[data-id]')));
+});
+run(async()=>{
+  if(!(await ping())){
+    main.innerHTML='<div class="empty"><h3>API에 연결하지 못했어요</h3><p>오른쪽 위 API 설정에서 Worker 주소를 입력하고 저장하세요.</p><button class="btn pri" data-a="settings">API 설정 열기</button></div>';return;
+  }
+  await loadSets();await route();
+});
+</script>
+</body>
+</html>
