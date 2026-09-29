@@ -9,7 +9,7 @@
 @media(prefers-color-scheme:dark){:root{--bg:#0f171b;--pn:#162227;--ink:#e4ecea;--mut:#8fa2a8;--ln:#26363c;--pri:#4fb8b2;--pri-t:#173a3a;--seal:#e0665e;--ok:#5fc58f}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
-header{display:flex;align-items:center;gap:10px;padding:12px 20px;background:var(--pn);border-bottom:1px solid var(--ln)}
+header{display:flex;align-items:center;gap:10px;padding:12px 20px;background:#343a40;color:#fff;border-bottom:1px solid #202428}header .btn{color:#fff;border-color:#68727b}header #apiTxt{color:#d6dbe0}
 header h1{font-size:17px;margin:0}.brand{display:flex;align-items:center;gap:10px;flex:1}.brand img{width:112px;height:auto;background:transparent}.brand small{display:block;color:#d6dbe0;font-size:11px;letter-spacing:.08em}
 #apiTxt{color:var(--mut);font-size:13px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wrap{display:grid;grid-template-columns:290px 1fr;min-height:calc(100vh - 54px)}
@@ -143,7 +143,7 @@ async function api(m,p,b={}){
     }
   }else if(r==='actions'){
     if(m==='POST')db.actions.push({id:uid('act_'),meeting_id:b.meeting_id,category:b.category||'—',description:b.description,owner:b.owner||'TBD',due_on:b.due_on||'',status:'open'});
-    else if(m==='PATCH')setF(need(db.actions.find(x=>x.id===id),'후속조치를 찾을 수 없어요'),b,['status','owner','due_on','category','description']);
+    else if(m==='PATCH')setF(need(db.actions.find(x=>x.id===id),'후속조치를 찾을 수 없어요'),b,['status','owner','due_on','category','description','description_en']);
     else del('actions',x=>x.id===id);
   }else if(r==='footprint'){
     if(m==='POST')db.footprint.push({id:uid('fp_'),org_id:b.org_id,meeting_id:b.meeting_id,occurred_on:b.occurred_on||new Date().toISOString().slice(0,10),title:b.title||'',one_liner:b.one_liner});
@@ -171,7 +171,7 @@ function render(){
   renderRail();
   if(!D){main.innerHTML='<div class="empty"><h3>회의 세트를 선택하세요</h3><p>왼쪽 목록에서 세트를 고르거나, 새 세트를 만들어 시작하세요.</p></div>';return}
   const s=D.set;
-  const tabs=[['info','개요'],['art',`산출물 ${D.artifacts.length}`],['act',`후속조치 ${D.actions.length}`],['mail','메일 발송'],['fp','발자취']];
+  const tabs=[['info','개요'],['art',`아웃풋 ${D.artifacts.length}`],['act',`후속조치 ${D.actions.length}`],['mail','메일 발송'],['fp','발자취']];
   main.innerHTML=`<div class="top"><div><h2>${esc(s.code)} ${esc(s.title||'')}</h2><p>${esc(s.org_name)}${s.org_country?' ('+esc(s.org_country)+')':''}</p></div><button class="btn sm danger" data-a="delset">세트 삭제</button></div>
   <ol class="steps">${D.stages.map(x=>`<li class="${x.n<s.stage?'done':''} ${x.n==s.stage?'cur':''} ${x.gate?'gate':''}"><button class="step" data-a="stage" data-n="${x.n}" ${x.n==8?'disabled':''} title="${esc(x.desc)}"><b>${x.n}</b>${esc(x.label)}</button></li>`).join('')}</ol>
   ${s.stage===7?`<div class="seal"><div><b>대표 승인 대기</b><p>회의록, 아젠다, 발송 문안을 검토한 뒤 승인하면 참석자 배포 단계로 넘어가요.</p></div><input id="actor" value="${esc(cfg.actor)}" placeholder="승인자 이름"><button class="btn stamp" data-a="approve">승인하기</button></div>`:''}
@@ -197,77 +197,13 @@ function paneArt(){
   <details class="src" open><summary>회의 음성·PDF를 전사하고 회의록으로 정리하기</summary><input type="file" id="src-file" accept="audio/*,.m4a,.mp3,.wav,.pdf,.txt,.md"><p class="hint">음성(m4a, mp3, wav 등)이나 PDF(스캔·손글씨 포함)를 올리면 그대로 전사해 전사본으로 저장하고, 이어서 회의록으로 정리해요. 파일은 14MB까지 가능해요.</p><textarea id="src" rows="5" placeholder="파일 대신 회의 메모나 전사 내용을 붙여 넣어도 돼요"></textarea><div class="row" style="margin-top:8px"><button class="btn pri" data-a="aifile">전사하고 회의록 정리</button></div></details>
   ${D.artifacts.map(a=>`<details class="art" data-id="${a.id}" data-kind="${a.kind}"><summary>${esc(KIND[a.kind]||a.kind)} v${a.version}<span class="tag ${a.status}">${a.status==='approved'?'승인됨':'초안'}</span> ${esc(a.title||'')}</summary><div class="in">
   <label>제목<input class="a-t" value="${esc(a.title)}"></label><label>내용<textarea class="a-b" rows="12">${esc(a.body)}</textarea></label>
-  <div class="row"><button class="btn pri" data-a="asave">저장</button><button class="btn" data-a="apolish">AI로 다듬기</button>${a.kind==='agenda'||a.kind==='minutes'?'<button class="btn" data-a="acomp">AI로 초안 완성</button>':''}<select class="a-l">${langs.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join('')}</select><button class="btn" data-a="atr">번역본 저장</button><button class="btn danger" data-a="adel">삭제</button></div></div></details>`).join('')||'<p class="empty">아직 산출물이 없어요. 위 버튼으로 AI 초안을 만들거나 아래에서 직접 추가하세요.</p>'}
-  <details class="art"><summary>산출물 직접 추가</summary><div class="in"><label>종류<select id="n-kind">${Object.entries(KIND).map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></label>${fld('n-title','제목','')}<label>내용<textarea id="n-body" rows="6"></textarea></label><button class="btn pri" data-a="newart">추가</button></div></details>`;
+  <div class="row"><button class="btn pri" data-a="asave">저장</button><button class="btn" data-a="apolish">AI로 다듬기</button>${a.kind==='agenda'||a.kind==='minutes'?'<button class="btn" data-a="acomp">AI로 초안 완성</button>':''}<select class="a-l">${langs.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join('')}</select><button class="btn" data-a="atr">번역본 저장</button><button class="btn danger" data-a="adel">삭제</button></div></div></details>`).join('')||'<p class="empty">아직 아웃풋이 없어요. 위 버튼으로 AI 초안을 만들거나 아래에서 직접 추가하세요.</p>'}
+  <details class="art"><summary>아웃풋 직접 추가</summary><div class="in"><label>종류<select id="n-kind">${Object.entries(KIND).map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></label>${fld('n-title','제목','')}<label>내용<textarea id="n-body" rows="6"></textarea></label><button class="btn pri" data-a="newart">추가</button></div></details>`;
 }
 function paneAct(){
-  return `${D.actions.map(a=>`<div class="item"><div><b>${esc(a.description)}</b><br><small>${esc(a.category)}, 담당 ${esc(a.owner)}${a.due_on?', 기한 '+esc(a.due_on):''}</small></div><button class="btn sm" data-a="acttog" data-id="${a.id}" data-s="${a.status==='done'?'open':'done'}">${a.status==='done'?'완료됨(되돌리기)':'완료 처리'}</button><button class="btn sm danger" data-a="actdel" data-id="${a.id}">삭제</button></div>`).join('')||'<p class="empty">등록된 후속조치가 없어요.</p>'}
-  <h3 style="margin-top:20px">후속조치 추가</h3><div class="row"><input id="x-cat" placeholder="구분"><input id="x-owner" placeholder="담당"><input id="x-due" placeholder="기한 2026-10-31"></div>
-  <div class="row" style="margin-top:8px"><input id="x-desc" placeholder="내용"><button class="btn pri" data-a="actadd">추가</button></div>`;
-}
-function paneFp(){
-  return `${D.footprint.map(f=>`<div class="item"><div><b>${esc(f.title||'')}</b> <small>${esc(f.occurred_on||'')}</small><br>${esc(f.one_liner)}</div><button class="btn sm danger" data-a="fpdel" data-id="${f.id}">삭제</button></div>`).join('')||'<p class="empty">이 기관과의 기록이 아직 없어요.</p>'}
-  <h3 style="margin-top:20px">기록 추가</h3><div class="row"><input id="f-on" placeholder="날짜 2026-09-28"><input id="f-title" placeholder="제목"></div>
-  <div class="row" style="margin-top:8px"><input id="f-one" placeholder="한 줄 요약"><button class="btn pri" data-a="fpadd">추가</button></div>`;
+  return `<div class="tool"><b>후속조치 편집</b><p class="hint">각 후속조치의 내용을 직접 수정하거나 영어로 번역할 수 있습니다.</p></div>${D.actions.map(a=>`<div class="item action-edit" data-id="${a.id}"><div style="flex:1"><div class="row"><input class="x-cat" value="${esc(a.category||'')}" placeholder="구분"><input class="x-owner" value="${esc(a.owner||'')}" placeholder="담당자"><input class="x-due" value="${esc(a.due_on||'')}" placeholder="기한"></div><textarea class="x-desc" rows="4" placeholder="후속조치 내용">${esc(a.description||'')}</textarea><textarea class="x-en" rows="3" placeholder="English translation (optional)">${esc(a.description_en||'')}</textarea><div class="row"><button class="btn pri" data-a="actsave" data-id="${a.id}">저장</button><button class="btn" data-a="acttranslate" data-id="${a.id}">영문 번역</button><select class="x-status"><option value="open" ${(a.status==='todo'||a.status==='open')?'selected':''}>미완료</option><option value="doing" ${a.status==='doing'?'selected':''}>진행 중</option><option value="done" ${a.status==='done'?'selected':''}>완료</option></select><button class="btn danger" data-a="actdel" data-id="${a.id}">삭제</button></div></div></div>`).join('')||'<p class="empty">아직 후속조치가 없어요. 아웃풋에서 후속조치로 넘겨보세요.</p>'}`;
 }
 
-function openSettings(){
-  dlg.innerHTML=`<h3>설정</h3><label>승인자 이름<input id="c-actor" value="${esc(cfg.actor)}" placeholder="대표 승인 때 기록될 이름"></label><label>Gemini API 키<input id="c-gkey" type="password" autocomplete="off" value="${esc(cfg.gkey)}" placeholder="AI 기능에 쓸 내 키"></label><label>Gemini 모델<input id="c-model" value="${esc(cfg.model)}"></label><p class="hint">키와 모든 회의 데이터는 이 브라우저에만 저장돼요. AI 호출만 Google로 직접 나가요. 브라우저 데이터를 지우면 회의 데이터도 사라지니 가끔 백업을 받아 두세요.</p><div class="row"><button class="btn sm" data-a="backup">백업 내려받기</button><button class="btn sm" data-a="restore">백업 불러오기</button><input type="file" id="c-file" accept=".json" hidden></div><div class="row end" style="margin-top:14px"><button class="btn" data-x>닫기</button><button class="btn pri" data-a="savecfg">저장</button></div>`;
-  dlg.showModal();
-  $('#c-file').onchange=e=>run(async()=>{
-    const f=e.target.files[0];if(!f)return;
-    let j;try{j=JSON.parse(await f.text())}catch(x){throw new Error('백업 파일을 읽을 수 없어요')}
-    if(!Array.isArray(j.sets)||!Array.isArray(j.meetings))throw new Error('백업 파일 형식이 아니에요');
-    if(!confirm('현재 데이터를 이 백업으로 바꿀까요?'))return;
-    localStorage.setItem(DB_KEY,JSON.stringify(j));dlg.close();cur=null;D=null;location.hash='';await loadSets();render();return '백업을 불러왔어요';
-  });
-}
-async function openNew(){
-  const orgs=await api('GET','/api/orgs');
-  dlg.innerHTML=`<h3>새 회의 세트</h3>${fld('n-id','세트 ID (영문, 숫자)','','예: aorael-1')}${fld('n-title','제목','')}
-  <label>기관<select id="n-org">${orgs.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}<option value="">새 기관 입력</option></select></label>
-  <div id="n-neworg" ${orgs.length?'hidden':''}>${fld('n-orgname','새 기관명','')}</div>${fld('n-at','일시','','2026-10-05 14:00')}${fld('n-venue','장소','')}
-  <label>목적<textarea id="n-purpose" rows="2"></textarea></label><div class="row end"><button class="btn" data-x>닫기</button><button class="btn pri" data-a="mkset">만들기</button></div>`;
-  dlg.showModal();const sel=$('#n-org');sel.onchange=()=>$('#n-neworg').hidden=!!sel.value;
-}
-
-const list=a=>a.join('\n')||'- 없음';
-const ctx=()=>{const s=D.set;return `[기관] ${s.org_name} (${s.org_country||'국가 미확인'})\n[세트] ${s.code} ${s.title||''}\n[일시] ${s.scheduled_at||'미확정'} / 장소: ${s.venue||'미확정'} / 방식: ${s.mode||'미확정'}`};
-async function gem(prompt,temp=.4,max=8192){
-  if(!cfg.gkey)throw new Error('API 설정에서 Gemini 키를 먼저 입력하세요.');
-  let r;
-  try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model||'gemini-3.8-flash')}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':cfg.gkey},body:JSON.stringify({contents:[{parts:typeof prompt==='string'?[{text:prompt}]:prompt}],generationConfig:{temperature:temp,maxOutputTokens:max}})})}
-  catch(e){throw new Error('Gemini에 연결할 수 없어요. 네트워크를 확인하세요.')}
-  const j=await r.json().catch(()=>null);
-  if(!r.ok)throw new Error(j?.error?.message||'Gemini 오류 (HTTP '+r.status+')');
-  const t=(j?.candidates?.[0]?.content?.parts||[]).map(p=>p.text).filter(Boolean).join('\n');
-  if(!t)throw new Error('Gemini가 응답을 만들지 못했어요'+(j?.candidates?.[0]?.finishReason?' ('+j.candidates[0].finishReason+')':''));
-  return t;
-}
-async function saveArt({kind,title,body,lang,ex}){
-  if(ex)return api('PATCH','/api/artifacts/'+ex.id,{body,status:'draft',version:(ex.version||1)+1});
-  return api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind,title,body,lang:lang||'ko'});
-}
-const copy=t=>navigator.clipboard.writeText(t).catch(()=>{});
-document.addEventListener('input',e=>{const k={'mk-sub':'sub','mk-body':'body','mk-kind':'kind','mk-lang':'lang'}[e.target.id];if(k)mail[k]=e.target.value});
-async function filePart(f){
-  if(f.type.startsWith('text/')||/\.(txt|md)$/i.test(f.name))return{text:await f.text()};
-  const ext=(f.name.split('.').pop()||'').toLowerCase(),mm={m4a:'audio/mp4',mp3:'audio/mpeg',wav:'audio/wav',aac:'audio/aac',ogg:'audio/ogg',flac:'audio/flac',pdf:'application/pdf'},mime=mm[ext]||f.type;
-  if(!(mime.startsWith('audio/')||mime==='application/pdf'))throw new Error('지원하지 않는 파일이에요. 음성, PDF, 텍스트 파일만 올릴 수 있어요.');
-  if(f.size>14*1024*1024)throw new Error('파일이 14MB보다 커요. 음성은 압축하거나 나눠서 올려 주세요.');
-  const data=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=()=>rej(new Error('파일을 읽지 못했어요'));r.readAsDataURL(f)});
-  return{inlineData:{mimeType:mime,data}};
-}
-const minPrompt=text=>{const ins=v('ins');return `당신은 국제기구/기관과의 양자회담 회의록을 정리하는 실무자입니다. 아래 [원본 자료]는 회의 전사본 또는 실무자가 입력한 회의 기록입니다. 이를 바탕으로 한국어 회의록으로 정리하세요.\n\n${ctx()}\n\n[출력 형식]\n## 주요 논의 내용\n(구분별로 묶어서 불릿 정리. 발화자가 특정되면 언급)\n## 합의사항 및 후속조치\n(구분 | 후속조치 | 담당 | 기한 — 표 형태 텍스트로)\n## 회의 결과 요약\n(2~3문장)\n\n원본에 없는 내용은 지어내지 말고, 불명확한 부분은 "[확인 필요]"로 표시하세요.${ins?`\n\n[추가 지시사항]\n${ins}`:''}\n\n[원본 자료]\n${text}`};
-const rcs=()=>[...document.querySelectorAll('.rc:checked')].map(x=>({e:x.dataset.e,n:x.dataset.n}));
-const gmailUrl=(to,bcc,su,body)=>`https://mail.google.com/mail/?view=cm&fs=1${to?'&to='+encodeURIComponent(to):''}${bcc?'&bcc='+encodeURIComponent(bcc):''}&su=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`;
-function mailReady(name){
-  const rs=rcs(),su=v('mk-sub'),body=($('#mk-body').value||'').replaceAll('{이름}',name||'관계자');
-  if(!name&&!rs.length)throw new Error('수신자를 한 명 이상 선택하세요');
-  if(!su||!body.trim())throw new Error('제목과 본문을 입력하세요');
-  return{rs,su,body};
-}
-async function logMail(rs,su,body){await api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind:'email',title:'발송: '+su,body:'수신: '+rs.map(r=>r.e).join(', ')+'\n\n'+body});await openSet(cur)}
 function paneMail(){
   const em=D.attendees.filter(a=>a.email),op=(a,cur)=>a.map(x=>`<option value="${x[0]}" ${x[0]===cur?'selected':''}>${x[1]}</option>`).join('');
   return `<h3>수신자</h3>${em.length?`<div class="row" style="margin-bottom:8px"><button class="btn sm" data-a="mailall" data-m="all">전체 선택</button><button class="btn sm" data-a="mailall" data-m="partner">상대측만</button><button class="btn sm" data-a="mailall" data-m="none">해제</button></div>`+em.map(a=>`<label class="chk"><input type="checkbox" class="rc" data-e="${esc(a.email)}" data-n="${esc(a.name)}" data-side="${a.side}" checked>${esc(a.name)} <small>${esc(a.email)}, ${a.side==='korea'?'우리측':'상대측'}</small></label>`).join(''):'<p class="empty">이메일이 있는 참석자가 없어요. 개요 탭에서 참석자를 추가하거나 명단을 붙여 넣으세요.</p>'}
@@ -443,6 +379,9 @@ const H={
   },
   async adel(t,d){if(!confirm('이 산출물을 삭제할까요?'))return;await api('DELETE','/api/artifacts/'+d.dataset.id);await openSet(cur);return '삭제했어요'},
   async newart(){await api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind:v('n-kind'),title:v('n-title'),body:$('#n-body').value});await reload();return '산출물을 추가했어요'},
+  async actsave(t,d){const id=d.dataset.id,box=d.closest('.action-edit');await api('PATCH','/api/actions/'+id,{category:box.querySelector('.x-cat').value,owner:box.querySelector('.x-owner').value,due_on:box.querySelector('.x-due').value,description:box.querySelector('.x-desc').value,status:box.querySelector('.x-status').value,description_en:box.querySelector('.x-en').value});await openSet(cur);return '후속조치를 저장했어요'},
+  async acttranslate(t,d){const box=d.closest('.action-edit'),ta=box.querySelector('.x-desc');if(!ta.value.trim())throw new Error('번역할 내용을 입력하세요');box.querySelector('.x-en').value=await gem(`Translate the following follow-up action into clear professional English. Return only the translation.\\n\\n${ta.value}`,.2);return '영문 번역을 입력했어요. 저장을 눌러 반영하세요'},
+  async actdel(t,d){if(!confirm('이 후속조치를 삭제할까요?'))return;await api('DELETE','/api/actions/'+d.dataset.id);await openSet(cur);return '삭제했어요'},
   async actadd(){
     if(!v('x-desc'))throw new Error('후속조치 내용을 입력하세요');
     await api('POST','/api/actions',{meeting_id:D.set.meeting_id,category:v('x-cat')||undefined,description:v('x-desc'),owner:v('x-owner')||undefined,due_on:v('x-due')||undefined});await reload();return '후속조치를 추가했어요';
