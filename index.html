@@ -199,7 +199,7 @@ function paneArt(){
   <p class="artifacts-help">회의록은 전문·요약·번역·후속조치 추출까지 여러 아웃풋으로 관리할 수 있습니다. 각 아웃풋의 내용을 충분히 검토한 뒤 후속조치로 넘기세요.</p><details class="art pastel-other" open><summary>아웃풋 직접 추가</summary><div class="in"><label>종류<select id="n-kind">${Object.entries(KIND).map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></label>${fld('n-title','제목','')}<label>내용<textarea id="n-body" rows="6"></textarea></label><button class="btn pri" data-a="newart">추가</button></div></details>
   ${D.artifacts.map(a=>`<details class="art pastel-${KIND[a.kind]?'':'other'}${a.kind&&KIND[a.kind]?a.kind:'other'}" data-id="${a.id}" data-kind="${a.kind}"><summary>${esc(KIND[a.kind]||a.kind)} v${a.version}<span class="tag ${a.status}">${a.status==='approved'?'승인됨':'초안'}</span> ${esc(a.title||'')}</summary><div class="in">
   <label>제목<input class="a-t" value="${esc(a.title)}"></label><label>내용<textarea class="a-b" rows="24">${esc(a.body)}</textarea></label>
-  <div class="row"><button class="btn pri" data-a="asave">저장</button><button class="btn" data-a="apolish">AI로 다듬기</button>${a.kind==='agenda'||a.kind==='minutes'?'<button class="btn" data-a="acomp">AI로 초안 완성</button>':''}<select class="a-l">${langs.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join('')}</select><button class="btn" data-a="atr">번역본 저장</button><button class="btn" data-a="toactions" data-id="${a.id}">후속조치로 넘기기</button><button class="btn danger" data-a="adel">삭제</button></div></div></details>`).join('')||'<p class="empty">아직 아웃풋이 없어요. 위 버튼으로 AI 초안을 만들거나 아래에서 직접 추가하세요.</p>'}
+  <div class="row"><button class="btn pri" data-a="asave">저장</button><button class="btn" data-a="apolish">AI로 다듬기</button>${a.kind==='agenda'||a.kind==='minutes'?'<button class="btn" data-a="acomp">AI로 초안 완성</button>':''}<select class="a-l">${langs.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join('')}</select><button class="btn" data-a="atr">번역본 저장</button><button class="btn" data-a="tomail" data-id="${a.id}">메일발송 목록에 넣기</button><button class="btn" data-a="toactions" data-id="${a.id}">후속조치로 넘기기</button><button class="btn danger" data-a="adel">삭제</button></div></div></details>`).join('')||'<p class="empty">아직 아웃풋이 없어요. 위 버튼으로 AI 초안을 만들거나 아래에서 직접 추가하세요.</p>'}
 `;
 }
 function paneAct(){
@@ -442,6 +442,14 @@ const H={
     if(!text)throw new Error('번역할 내용이 없어요');
     const body=await gem(`다음 텍스트를 ${name}로 번역하세요. 외교/공식 문서 어조를 유지하고, 번역 결과만 출력하세요 (설명이나 원문 반복 금지).\n\n---\n${text}`,.2);
     await saveArt({kind:d.dataset.kind,title:`${d.querySelector('.a-t').value||'문서'} (${name} 번역)`,body,lang:sel.value});await openSet(cur);return '번역본을 저장했어요';
+  },
+  async tomail(t,d){
+    const a=D.artifacts.find(x=>x.id===d.dataset.id); if(!a)throw new Error('아웃풋을 찾을 수 없어요');
+    if(!(a.body||'').trim())throw new Error('내용이 없는 아웃풋이에요');
+    const label=KIND[a.kind]||'아웃풋';
+    mail.sub=`[${D.set.code}] ${label} 전달 및 확인 요청`;
+    mail.body=`안녕하세요.\n\n${D.set.org_name||''} 양자회담 관련 ${label}을(를) 전달드립니다.\n\n[${a.title||label}]\n${a.body}\n\n내용을 확인하시고 의견이나 수정사항이 있으면 회신 부탁드립니다.\n\n감사합니다.`;
+    tab='mail'; render(); return `${label}을 메일발송 목록에 넣었어요. 수신자를 확인한 뒤 발송하세요.`;
   },
   async toactions(t,d){
     const a=D.artifacts.find(x=>x.id===d.dataset.id); if(!a)throw new Error('아웃풋을 찾을 수 없어요');
