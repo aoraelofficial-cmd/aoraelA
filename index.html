@@ -11,7 +11,6 @@
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
 header{display:flex;align-items:center;gap:10px;padding:12px 20px;background:var(--pn);border-bottom:1px solid var(--ln)}
 header h1{font-size:17px;margin:0;flex:1}
-#dot{width:9px;height:9px;border-radius:50%;background:var(--mut)}#dot.ok{background:var(--ok)}#dot.bad{background:var(--seal)}
 #apiTxt{color:var(--mut);font-size:13px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wrap{display:grid;grid-template-columns:290px 1fr;min-height:calc(100vh - 54px)}
 aside{border-right:1px solid var(--ln);background:var(--pn)}
@@ -67,7 +66,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 </style>
 </head>
 <body>
-<header><h1>양자회담 관리</h1><span id="dot"></span><span id="apiTxt">확인 중</span><button class="btn sm" data-a="settings">API 설정</button></header>
+<header><h1>양자회담 관리</h1><span id="apiTxt">이 브라우저에 저장</span><button class="btn sm" data-a="settings">설정</button></header>
 <div class="wrap">
 <aside><div class="ah"><b>회의 세트</b><button class="btn pri sm" data-a="newset">새 세트</button></div><div id="rail"></div></aside>
 <main id="main"></main>
@@ -82,20 +81,77 @@ let cfg={base:'',actor:'',gkey:'',model:'gemini-3.8-flash'},sets=[],D=null,cur=n
 try{Object.assign(cfg,JSON.parse(localStorage.getItem('mtg_cfg')||'{}'))}catch(e){}
 const saveCfg=()=>{try{localStorage.setItem('mtg_cfg',JSON.stringify(cfg))}catch(e){}};
 
-async function api(m,p,b){
-  let r;
-  try{r=await fetch(cfg.base+p,{method:m,headers:b?{'content-type':'application/json'}:{},body:b?JSON.stringify(b):undefined})}
-  catch(e){throw new Error('API에 연결할 수 없어요. 주소를 확인하세요.')}
-  let j;try{j=await r.json()}catch(e){throw new Error('서버 응답을 읽을 수 없어요 (HTTP '+r.status+')')}
-  if(!j.ok)throw new Error(j.error||'요청에 실패했어요');
-  return j.data;
+const DB_KEY='mtg_db';
+const ST=[{n:1,label:'아젠다 초안',desc:'이번 회의에서 다룰 의제 초안을 작성하는 단계'},{n:2,label:'일시·참석자',desc:'회의 일시와 방식을 정하고 참석자 명단을 확정하는 단계'},{n:3,label:'일정 조율',desc:'제안한 일시를 상대 기관과 주고받으며 조율하는 단계'},{n:4,label:'확정·재공지',desc:'일시·장소·아젠다를 확정해 참석자에게 재공지하는 단계'},{n:5,label:'회의 진행',desc:'회의가 진행 중이거나 막 끝난 단계'},{n:6,label:'회의록 초안',desc:'회의 내용을 바탕으로 회의록 초안을 작성하는 단계'},{n:7,label:'대표 승인',gate:true,desc:'사람이 직접 확인하는 단계. 대표가 회의록·아젠다·발송 문안을 최종 검토하고 승인'},{n:8,label:'참석자 배포',desc:'승인된 문서를 참석자에게 발송·공유하는 단계'},{n:9,label:'확인 회수',desc:'상대측의 확인·회신을 받고 후속조치 이행을 체크하는 단계'},{n:10,label:'다음 아젠다',desc:'미결 후속조치를 다음 회의 아젠다로 넘기는 마무리 단계'}];
+let db;
+function load(){let j=null;try{j=JSON.parse(localStorage.getItem(DB_KEY))}catch(e){}db=Object.assign({orgs:[],sets:[],meetings:[],attendees:[],artifacts:[],actions:[],footprint:[]},j||{})}
+function persist(){try{localStorage.setItem(DB_KEY,JSON.stringify(db))}catch(e){throw new Error('브라우저 저장 공간이 부족해요. 설정에서 백업을 받고 오래된 세트를 정리하세요.')}}
+const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const need=(x,m)=>{if(!x)throw new Error(m);return x};
+const setF=(o,b,fs)=>fs.forEach(f=>{if(b[f]!==undefined)o[f]=b[f]});
+const del=(k,f)=>{db[k]=db[k].filter(x=>!f(x))};
+const mtgOf=sid=>db.meetings.find(x=>x.set_id===sid)||{};
+const orgOf=id=>db.orgs.find(o=>o.id===id)||{};
+function adv(mid,ev){const m=db.meetings.find(x=>x.id===mid);if(!m)return;if(ev==='agenda'&&m.stage===1)m.stage=2;else if(ev==='minutes'&&m.stage<6)m.stage=6;else if(ev==='email'&&m.stage===8)m.stage=9}
+function brief(s){const m=mtgOf(s.id),a=db.actions.filter(x=>x.meeting_id===m.id);return{id:s.id,code:s.code,title:s.title,org_name:orgOf(s.org_id).name,stage:m.stage,stage_label:ST[m.stage-1]?.label,action_total:a.length,action_done:a.filter(x=>x.status==='done').length}}
+async function api(m,p,b={}){
+  load();
+  const [r,id0,sub,cid]=p.split('/').filter(Boolean).slice(1),id=id0&&decodeURIComponent(id0);
+  let out={};
+  if(r==='orgs')out=db.orgs;
+  else if(r==='sets'){
+    if(m==='GET'&&!id)out=db.sets.map(brief);
+    else if(m==='GET'){
+      const s=need(db.sets.find(x=>x.id===id),'세트를 찾을 수 없어요'),mt=mtgOf(id),o=orgOf(s.org_id);
+      out={set:{...mt,...s,meeting_id:mt.id,org_name:o.name,org_country:o.country},stages:ST,
+        attendees:db.attendees.filter(a=>a.meeting_id===mt.id),artifacts:db.artifacts.filter(a=>a.meeting_id===mt.id),actions:db.actions.filter(a=>a.meeting_id===mt.id),
+        footprint:db.footprint.filter(f=>f.org_id===s.org_id).sort((x,y)=>(y.occurred_on||'').localeCompare(x.occurred_on||''))};
+    }else if(m==='POST'){
+      if(db.sets.some(x=>x.id===b.id))throw new Error('이미 있는 세트 ID예요: '+b.id);
+      let oid=b.org_id;
+      if(!oid){const ex=db.orgs.find(o=>o.name===b.org_name);oid=ex?ex.id:uid('org_');if(!ex)db.orgs.push({id:oid,name:b.org_name,country:''})}
+      db.sets.push({id:b.id,org_id:oid,code:b.id.toUpperCase(),title:b.title||''});
+      db.meetings.push({id:'mtg-'+b.id,set_id:b.id,stage:1,scheduled_at:b.scheduled_at||'',venue:b.venue||'',mode:'video',purpose:b.purpose||''});
+      out={id:b.id};
+    }else if(m==='DELETE'){
+      need(db.sets.find(x=>x.id===id),'세트를 찾을 수 없어요');
+      const mid=mtgOf(id).id;
+      ['attendees','artifacts','actions','footprint'].forEach(k=>del(k,x=>x.meeting_id===mid));
+      del('meetings',x=>x.set_id===id);del('sets',x=>x.id===id);
+    }
+  }else if(r==='meetings'){
+    const mt=need(db.meetings.find(x=>x.id===id),'회의를 찾을 수 없어요');
+    if(sub==='approve'){
+      if(mt.stage!==7)throw new Error('승인은 7단계에서만 할 수 있어요 (현재 '+mt.stage+'단계)');
+      const now=new Date().toISOString();
+      db.artifacts.forEach(a=>{if(a.meeting_id===id)Object.assign(a,{status:'approved',approved_by:b.actor,approved_at:now})});
+      Object.assign(mt,{stage:8,approved_by:b.actor,approved_at:now});
+    }else if(sub==='attendees'){
+      if(m==='POST')db.attendees.push({meeting_id:id,contact_id:uid('c_'),side:b.side,name:b.name,title:b.title||'',email:b.email||''});
+      else del('attendees',a=>a.meeting_id===id&&a.contact_id===cid);
+    }else{
+      if(b.stage===8)throw new Error('8단계는 대표 승인으로만 바뀌어요');
+      setF(mt,b,['stage','scheduled_at','venue','mode','platform','join_url','purpose']);
+    }
+  }else if(r==='artifacts'){
+    if(m==='POST'){db.artifacts.push({id:uid('art_'),meeting_id:b.meeting_id,kind:b.kind,version:1,lang:b.lang||'ko',title:b.title||'',body:b.body||'',status:'draft'});adv(b.meeting_id,b.kind)}
+    else{
+      const a=need(db.artifacts.find(x=>x.id===id),'산출물을 찾을 수 없어요');
+      if(m==='PATCH'){setF(a,b,['title','body','status','lang','version']);adv(a.meeting_id,a.kind)}else del('artifacts',x=>x.id===id);
+    }
+  }else if(r==='actions'){
+    if(m==='POST')db.actions.push({id:uid('act_'),meeting_id:b.meeting_id,category:b.category||'—',description:b.description,owner:b.owner||'TBD',due_on:b.due_on||'',status:'open'});
+    else if(m==='PATCH')setF(need(db.actions.find(x=>x.id===id),'후속조치를 찾을 수 없어요'),b,['status','owner','due_on','category','description']);
+    else del('actions',x=>x.id===id);
+  }else if(r==='footprint'){
+    if(m==='POST')db.footprint.push({id:uid('fp_'),org_id:b.org_id,meeting_id:b.meeting_id,occurred_on:b.occurred_on||new Date().toISOString().slice(0,10),title:b.title||'',one_liner:b.one_liner});
+    else del('footprint',x=>x.id===id);
+  }
+  if(m!=='GET')persist();
+  return JSON.parse(JSON.stringify(out));
 }
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(toast.h);toast.h=setTimeout(()=>t.className='',err?5000:2200)}
 async function run(fn){$('#busy').className='on';try{const m=await fn();if(m)toast(m)}catch(e){toast(e.message,1)}finally{$('#busy').className=''}}
-async function ping(){
-  try{await api('GET','/api/health');$('#dot').className='ok';$('#apiTxt').textContent=cfg.base||'현재 주소';return true}
-  catch(e){$('#dot').className='bad';$('#apiTxt').textContent='연결 안 됨';return false}
-}
 async function loadSets(){sets=await api('GET','/api/sets');renderRail()}
 async function open(id){cur=id;D=await api('GET','/api/sets/'+encodeURIComponent(id));render()}
 const reload=async()=>{await loadSets();if(cur)await open(cur)};
@@ -114,7 +170,7 @@ function render(){
   const s=D.set;
   const tabs=[['info','개요'],['art',`산출물 ${D.artifacts.length}`],['act',`후속조치 ${D.actions.length}`],['fp','발자취']];
   main.innerHTML=`<div class="top"><div><h2>${esc(s.code)} ${esc(s.title||'')}</h2><p>${esc(s.org_name)}${s.org_country?' ('+esc(s.org_country)+')':''}</p></div><button class="btn sm danger" data-a="delset">세트 삭제</button></div>
-  <ol class="steps">${D.stages.map(x=>`<li class="${x.n<s.stage?'done':''} ${x.n==s.stage?'cur':''} ${x.gate?'gate':''}"><button class="step" data-a="stage" data-n="${x.n}" ${x.n==7||x.n==8?'disabled':''} title="${esc(x.desc)}"><b>${x.n}</b>${esc(x.label)}</button></li>`).join('')}</ol>
+  <ol class="steps">${D.stages.map(x=>`<li class="${x.n<s.stage?'done':''} ${x.n==s.stage?'cur':''} ${x.gate?'gate':''}"><button class="step" data-a="stage" data-n="${x.n}" ${x.n==8?'disabled':''} title="${esc(x.desc)}"><b>${x.n}</b>${esc(x.label)}</button></li>`).join('')}</ol>
   ${s.stage===7?`<div class="seal"><div><b>대표 승인 대기</b><p>회의록, 아젠다, 발송 문안을 검토한 뒤 승인하면 참석자 배포 단계로 넘어가요.</p></div><input id="actor" value="${esc(cfg.actor)}" placeholder="승인자 이름"><button class="btn stamp" data-a="approve">승인하기</button></div>`:''}
   ${s.approved_by?`<p class="hint">승인: ${esc(s.approved_by)} (${esc(s.approved_at||'')})</p>`:''}
   <nav class="tabs">${tabs.map(t=>`<button class="${t[0]===tab?'on':''}" data-a="tab" data-t="${t[0]}">${t[1]}</button>`).join('')}</nav>
@@ -126,7 +182,7 @@ function paneInfo(){
   const s=D.set,side=k=>D.attendees.filter(a=>a.side===k);
   const grp=(k,l)=>`<p class="hint" style="margin:10px 0 0">${l}</p>${side(k).map(a=>`<div class="item"><div><b>${esc(a.name)}</b> <small>${esc(a.title||'')}</small><br><small>${esc(a.email||'')}</small></div><button class="btn sm danger" data-a="delatt" data-c="${a.contact_id}">삭제</button></div>`).join('')||'<p class="hint">없음</p>'}`;
   return `<div class="cols"><div><h3>회의 정보</h3>
-  ${fld('m-at','일시',s.scheduled_at,'2026-10-05 14:00')}${fld('m-mode','방식',s.mode,'video 또는 onsite')}${fld('m-venue','장소',s.venue)}${fld('m-platform','화상 플랫폼',s.platform)}${fld('m-url','접속 링크 (입력한 경우에만 저장)','')}
+  ${fld('m-at','일시',s.scheduled_at,'2026-10-05 14:00')}${fld('m-mode','방식',s.mode,'video 또는 onsite')}${fld('m-venue','장소',s.venue)}${fld('m-platform','화상 플랫폼',s.platform)}${fld('m-url','접속 링크',s.join_url)}
   <label>목적<textarea id="m-purpose" rows="3">${esc(s.purpose)}</textarea></label><button class="btn pri" data-a="savem">저장</button></div>
   <div><h3>참석자</h3>${grp('korea','우리측')}${grp('partner','상대측')}
   <div class="row" style="margin-top:12px"><input id="p-name" placeholder="이름"><input id="p-title" placeholder="직함"></div>
@@ -153,8 +209,15 @@ function paneFp(){
 }
 
 function openSettings(){
-  dlg.innerHTML=`<h3>API 설정</h3><label>데이터 서버(Worker) 주소<input id="c-base" value="${esc(cfg.base)}" placeholder="https://내-worker.workers.dev (비우면 현재 주소)"></label><label>승인자 이름<input id="c-actor" value="${esc(cfg.actor)}" placeholder="대표 승인 때 기록될 이름"></label><label>Gemini API 키<input id="c-gkey" type="password" autocomplete="off" value="${esc(cfg.gkey)}" placeholder="AI 기능에 쓸 내 키"></label><label>Gemini 모델<input id="c-model" value="${esc(cfg.model)}"></label><p class="hint" id="c-res">키는 이 브라우저에만 저장되고, AI 호출은 Google로 직접 나가요. 서버에는 키가 필요 없어요. 저장하면 Worker 연결을 바로 확인해요.</p><div class="row end"><button class="btn" data-x>닫기</button><button class="btn pri" data-a="savecfg">저장하고 연결</button></div>`;
+  dlg.innerHTML=`<h3>설정</h3><label>승인자 이름<input id="c-actor" value="${esc(cfg.actor)}" placeholder="대표 승인 때 기록될 이름"></label><label>Gemini API 키<input id="c-gkey" type="password" autocomplete="off" value="${esc(cfg.gkey)}" placeholder="AI 기능에 쓸 내 키"></label><label>Gemini 모델<input id="c-model" value="${esc(cfg.model)}"></label><p class="hint">키와 모든 회의 데이터는 이 브라우저에만 저장돼요. AI 호출만 Google로 직접 나가요. 브라우저 데이터를 지우면 회의 데이터도 사라지니 가끔 백업을 받아 두세요.</p><div class="row"><button class="btn sm" data-a="backup">백업 내려받기</button><button class="btn sm" data-a="restore">백업 불러오기</button><input type="file" id="c-file" accept=".json" hidden></div><div class="row end" style="margin-top:14px"><button class="btn" data-x>닫기</button><button class="btn pri" data-a="savecfg">저장</button></div>`;
   dlg.showModal();
+  $('#c-file').onchange=e=>run(async()=>{
+    const f=e.target.files[0];if(!f)return;
+    let j;try{j=JSON.parse(await f.text())}catch(x){throw new Error('백업 파일을 읽을 수 없어요')}
+    if(!Array.isArray(j.sets)||!Array.isArray(j.meetings))throw new Error('백업 파일 형식이 아니에요');
+    if(!confirm('현재 데이터를 이 백업으로 바꿀까요?'))return;
+    localStorage.setItem(DB_KEY,JSON.stringify(j));dlg.close();cur=null;D=null;location.hash='';await loadSets();render();return '백업을 불러왔어요';
+  });
 }
 async function openNew(){
   const orgs=await api('GET','/api/orgs');
@@ -185,12 +248,13 @@ async function saveArt({kind,title,body,lang,ex}){
 const H={
   settings:async()=>openSettings(),
   newset:openNew,
-  async savecfg(){
-    let b=v('c-base').replace(/\/+$/,'');if(b&&!/^https?:\/\//.test(b))b='https://'+b;
-    cfg.base=b;cfg.actor=v('c-actor');cfg.gkey=v('c-gkey');cfg.model=v('c-model')||'gemini-3.8-flash';saveCfg();
-    if(await ping()){dlg.close();await loadSets();await route();return 'API에 연결했어요'}
-    $('#c-res').textContent='연결하지 못했어요. 주소와 Worker 배포 상태를 확인하세요.';
+  savecfg(){cfg.actor=v('c-actor');cfg.gkey=v('c-gkey');cfg.model=v('c-model')||'gemini-3.8-flash';saveCfg();dlg.close();return '설정을 저장했어요'},
+  backup(){
+    load();const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}));
+    a.download='양자회담-백업-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);
   },
+  restore(){$('#c-file').click()},
   async mkset(){
     const id=v('n-id');if(!id)throw new Error('세트 ID를 입력하세요');
     const oid=v('n-org'),b={id,title:v('n-title'),scheduled_at:v('n-at'),venue:v('n-venue'),purpose:v('n-purpose')};
@@ -206,7 +270,7 @@ const H={
   },
   async savem(){
     const b={scheduled_at:v('m-at'),mode:v('m-mode'),venue:v('m-venue'),platform:v('m-platform'),purpose:v('m-purpose')};
-    if(v('m-url'))b.join_url=v('m-url');
+    b.join_url=v('m-url');
     await api('PATCH','/api/meetings/'+D.set.meeting_id,b);await reload();return '회의 정보를 저장했어요';
   },
   async addatt(){
@@ -266,12 +330,7 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('[data-a]');if(!t||!H[t.dataset.a])return;
   run(()=>H[t.dataset.a](t,t.closest('details[data-id]')));
 });
-run(async()=>{
-  if(!(await ping())){
-    main.innerHTML='<div class="empty"><h3>API에 연결하지 못했어요</h3><p>오른쪽 위 API 설정에서 Worker 주소를 입력하고 저장하세요.</p><button class="btn pri" data-a="settings">API 설정 열기</button></div>';return;
-  }
-  await loadSets();await route();
-});
+run(async()=>{await loadSets();await route()});
 </script>
 </body>
 </html>
