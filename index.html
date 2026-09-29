@@ -65,11 +65,11 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 @media(max-width:800px){.wrap{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--ln)}main{padding:16px}.cols{grid-template-columns:1fr}}
 .og{display:flex;justify-content:space-between;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--ln);font-size:13px}.og small{color:var(--mut)}
 label.chk{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin:0 0 6px}label.chk input{width:auto;margin:0}
-html.light{--bg:#f2f4f3;--pn:#fff;--ink:#15232b;--mut:#667780;--ln:#d9dfdd;--pri:#0f5c5a;--pri-t:#e0efee;--seal:#b3362f;--ok:#1d7a4d}
+.art.pastel-agenda>summary{background:#e6f4ea}.art.pastel-minutes>summary{background:#e8e0f8}.art.pastel-minutes_a>summary{background:#e0eef8}.art.pastel-minutes_b>summary{background:#fff0cc}.art.pastel-email>summary{background:#f9e0e6}.art.pastel-transcript>summary{background:#e0f3f2}.art.pastel-feedback>summary{background:#f5e5d5}.art.pastel-other>summary{background:#edf0f2}.art>summary{border-radius:8px;transition:filter .15s}.art>summary:hover{filter:brightness(.97)}
 </style>
 </head>
 <body>
-<header><h1>AOREAL 양자회담 관리</h1><span id="apiTxt">이 브라우저에 저장</span><button class="btn sm" data-a="theme">화면 밝게/어둡게</button><button class="btn sm" data-a="settings">설정</button></header>
+<header><h1>AOREAL 양자회담 관리</h1><span id="apiTxt">이 브라우저에 저장</span><button class="btn sm" data-a="settings">설정</button></header>
 <div class="wrap">
 <aside><div class="ah"><b>회의 세트</b><span class="row"><button class="btn sm" data-a="insight">인사이트</button><button class="btn sm" data-a="bulkorgs">기관 일괄 등록</button><button class="btn pri sm" data-a="newset">새 세트</button></span></div><div id="rail"></div></aside>
 <main id="main"></main>
@@ -80,7 +80,7 @@ const $=s=>document.querySelector(s),main=$('#main'),dlg=$('#dlg');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const v=id=>($('#'+id)?.value||'').trim();
 const KIND={agenda:'아젠다',minutes:'회의록',minutes_a:'회의록 전문(A)',minutes_b:'경영진 요약(B)',email:'발송 메일',transcript:'전사본',feedback:'메일 회신'};
-let cfg={base:'',actor:'',gkey:'',model:'gemini-3.8-flash'},sets=[],D=null,cur=null,tab='info',mail={sub:'',body:'',kind:'agenda',lang:'ko'}; if(localStorage.getItem('aoreal_theme')==='light')document.documentElement.classList.add('light');
+let cfg={base:'',actor:'',gkey:'',model:'gemini-3.8-flash'},sets=[],D=null,cur=null,tab='info',mail={sub:'',body:'',kind:'agenda',lang:'ko'};
 try{Object.assign(cfg,JSON.parse(localStorage.getItem('mtg_cfg')||'{}'))}catch(e){}
 const saveCfg=()=>{try{localStorage.setItem('mtg_cfg',JSON.stringify(cfg))}catch(e){}};
 
@@ -196,11 +196,11 @@ function paneArt(){
   const langs=[['en','English'],['vi','Tiếng Việt'],['ja','日本語'],['zh','中文'],['fr','Français'],['de','Deutsch']];
   return `<div class="tool"><input id="ins" placeholder="AI에게 줄 추가 지시사항 (선택)"><button class="btn" data-a="aiagenda">아젠다 초안 만들기</button><button class="btn" data-a="aiab" data-doc="a">회의록 전문(A)</button><button class="btn" data-a="aiab" data-doc="b">경영진 요약(B)</button></div>
   <details class="src" open><summary>회의 음성·PDF를 전사하고 회의록으로 정리하기</summary><input type="file" id="src-file" accept="audio/*,.m4a,.mp3,.wav,.pdf,.txt,.md"><p class="hint">음성(m4a, mp3, wav 등)이나 PDF(스캔·손글씨 포함)를 올리면 그대로 전사해 전사본으로 저장하고, 이어서 회의록으로 정리해요. 파일은 14MB까지 가능해요.</p><textarea id="src" rows="5" placeholder="파일 대신 회의 메모나 전사 내용을 붙여 넣어도 돼요"></textarea><div class="row" style="margin-top:8px"><button class="btn pri" data-a="aifile">전사하고 회의록 정리</button></div></details>
-  ${D.artifacts.map(a=>`<details class="art" data-id="${a.id}" data-kind="${a.kind}"><summary>${esc(KIND[a.kind]||a.kind)} v${a.version}<span class="tag ${a.status}">${a.status==='approved'?'승인됨':'초안'}</span> ${esc(a.title||'')}</summary><div class="in">
+  <details class="art pastel-other" open><summary>산출물 직접 추가</summary><div class="in"><label>종류<select id="n-kind">${Object.entries(KIND).map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></label>${fld('n-title','제목','')}<label>내용<textarea id="n-body" rows="6"></textarea></label><button class="btn pri" data-a="newart">추가</button></div></details>
+  ${D.artifacts.map(a=>`<details class="art pastel-${KIND[a.kind]?'':'other'}${a.kind&&KIND[a.kind]?a.kind:'other'}" data-id="${a.id}" data-kind="${a.kind}"><summary>${esc(KIND[a.kind]||a.kind)} v${a.version}<span class="tag ${a.status}">${a.status==='approved'?'승인됨':'초안'}</span> ${esc(a.title||'')}</summary><div class="in">
   <label>제목<input class="a-t" value="${esc(a.title)}"></label><label>내용<textarea class="a-b" rows="12">${esc(a.body)}</textarea></label>
   <div class="row"><button class="btn pri" data-a="asave">저장</button><button class="btn" data-a="apolish">AI로 다듬기</button>${a.kind==='agenda'||a.kind==='minutes'?'<button class="btn" data-a="acomp">AI로 초안 완성</button>':''}<select class="a-l">${langs.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join('')}</select><button class="btn" data-a="atr">번역본 저장</button><button class="btn danger" data-a="adel">삭제</button></div></div></details>`).join('')||'<p class="empty">아직 산출물이 없어요. 위 버튼으로 AI 초안을 만들거나 아래에서 직접 추가하세요.</p>'}
-  <details class="art"><summary>산출물 직접 추가</summary><div class="in"><label>종류<select id="n-kind">${Object.entries(KIND).map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></label>${fld('n-title','제목','')}<label>내용<textarea id="n-body" rows="6"></textarea></label><button class="btn pri" data-a="newart">추가</button></div></details>`;
-}
+`;
 function paneAct(){
   return `${D.actions.map(a=>`<div class="item"><div><b>${esc(a.description)}</b><br><small>${esc(a.category)}, 담당 ${esc(a.owner)}${a.due_on?', 기한 '+esc(a.due_on):''}</small></div><button class="btn sm" data-a="acttog" data-id="${a.id}" data-s="${a.status==='done'?'open':'done'}">${a.status==='done'?'완료됨(되돌리기)':'완료 처리'}</button><button class="btn sm danger" data-a="actdel" data-id="${a.id}">삭제</button></div>`).join('')||'<p class="empty">등록된 후속조치가 없어요.</p>'}
   <h3 style="margin-top:20px">후속조치 추가</h3><div class="row"><input id="x-cat" placeholder="구분"><input id="x-owner" placeholder="담당"><input id="x-due" placeholder="기한 2026-10-31"></div>
@@ -289,7 +289,6 @@ function openBulk(){
   dlg.showModal();
 }
 const H={
-  theme(){document.documentElement.classList.toggle('light');localStorage.setItem('aoreal_theme',document.documentElement.classList.contains('light')?'light':'dark');return document.documentElement.classList.contains('light')?'밝은 화면으로 전환했어요':'어두운 화면으로 전환했어요'},
   settings:async()=>openSettings(),
   newset:openNew,
   savecfg(){cfg.actor=v('c-actor');cfg.gkey=v('c-gkey');cfg.model=v('c-model')||'gemini-3.8-flash';saveCfg();dlg.close();return '설정을 저장했어요'},
@@ -374,12 +373,11 @@ const H={
       if(part.text)text=part.text;
       else{
         text=await gem([{text:'다음 자료를 있는 그대로 전사하세요. 음성이면 말한 내용을 빠짐없이 옮기고 화자가 구분되면 화자1, 화자2로 표시하세요. 알아듣기 어려운 부분은 [inaudible]로 표시하세요. PDF나 이미지면 글자를 그대로 옮기고 읽을 수 없는 부분은 [판독 불가]로 표시하세요. 전사 결과만 출력하세요.'},part],.1,32768);
-        
+        await saveArt({kind:'transcript',title:`전사본 (${f.name})`,body:text});
       }
     }
     const body=await gem(minPrompt(text));
-    const combined=f?`## 전사본\n출처: ${f.name}\n\n${text}\n\n---\n## 회의록\n${body}`:body;
-    await saveArt({kind:'minutes',title:`회의록·전사본 통합본 ${s.code}`,body:combined});await reload();return '전사하고 회의록으로 정리했어요';
+    await saveArt({kind:'minutes',title:`회의록 초안(AI 정리) ${s.code}`,body});await reload();return '전사하고 회의록으로 정리했어요';
   },
   async apolish(t,d){
     const ta=d.querySelector('.a-b'),ins=v('ins')||prompt('어떻게 다듬을까요? (예: 더 공손하게, 영어로, 짧게)');
