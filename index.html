@@ -65,6 +65,8 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 @media(max-width:800px){.wrap{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--ln)}main{padding:16px}.cols{grid-template-columns:1fr}}
 .og{display:flex;justify-content:space-between;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--ln);font-size:13px}.og small{color:var(--mut)}
 label.chk{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin:0 0 6px}label.chk input{width:auto;margin:0}
+
+.teams-box{border:1px solid var(--ln);border-radius:8px;padding:12px 14px;margin-top:24px;background:var(--pn)}.teams-box>summary{cursor:pointer;color:var(--pri);font-size:15px}.mail-thread{border-top:1px solid var(--ln);padding:8px 0}.mail-thread summary{cursor:pointer}.mail-thread summary small{color:var(--mut);margin-left:8px}.thread-body{padding:8px 0}.mail-msg{border-left:3px solid var(--pri);padding:8px 10px;margin:7px 0;background:var(--bg)}.mail-msg.incoming{border-left-color:var(--seal)}.mail-msg small{display:block;color:var(--mut);font-size:12px}.mail-msg p{white-space:pre-wrap;margin:6px 0 0}
 </style>
 </head>
 <body>
@@ -79,14 +81,14 @@ const $=s=>document.querySelector(s),main=$('#main'),dlg=$('#dlg');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const v=id=>($('#'+id)?.value||'').trim();
 const KIND={agenda:'아젠다',minutes:'회의록',minutes_a:'회의록 전문(A)',minutes_b:'경영진 요약(B)',email:'발송 메일',transcript:'전사본',feedback:'메일 회신'};
-let cfg={base:'',actor:'',gkey:'',model:'gemini-3.8-flash'},sets=[],D=null,cur=null,tab='info',mail={sub:'',body:'',kind:'agenda',lang:'ko'};
+let cfg={base:'',actor:'',gkey:'',model:'gemini-3.8-flash'},sets=[],D=null,cur=null,tab='info',mail={sub:'',body:'',kind:'agenda',lang:'ko'},teams={channel:'teams',subject:'',to:'',from:'',body:'',threadId:''};
 try{Object.assign(cfg,JSON.parse(localStorage.getItem('mtg_cfg')||'{}'))}catch(e){}
 const saveCfg=()=>{try{localStorage.setItem('mtg_cfg',JSON.stringify(cfg))}catch(e){}};
 
 const DB_KEY='mtg_db';
 const ST=[{n:1,label:'아젠다 초안',desc:'이번 회의에서 다룰 의제 초안을 작성하는 단계'},{n:2,label:'일시·참석자',desc:'회의 일시와 방식을 정하고 참석자 명단을 확정하는 단계'},{n:3,label:'일정 조율',desc:'제안한 일시를 상대 기관과 주고받으며 조율하는 단계'},{n:4,label:'확정·재공지',desc:'일시·장소·아젠다를 확정해 참석자에게 재공지하는 단계'},{n:5,label:'회의 진행',desc:'회의가 진행 중이거나 막 끝난 단계'},{n:6,label:'회의록 초안',desc:'회의 내용을 바탕으로 회의록 초안을 작성하는 단계'},{n:7,label:'대표 승인',gate:true,desc:'사람이 직접 확인하는 단계. 대표가 회의록·아젠다·발송 문안을 최종 검토하고 승인'},{n:8,label:'참석자 배포',desc:'승인된 문서를 참석자에게 발송·공유하는 단계'},{n:9,label:'확인 회수',desc:'상대측의 확인·회신을 받고 후속조치 이행을 체크하는 단계'},{n:10,label:'다음 아젠다',desc:'미결 후속조치를 다음 회의 아젠다로 넘기는 마무리 단계'}];
 let db;
-function load(){let j=null;try{j=JSON.parse(localStorage.getItem(DB_KEY))}catch(e){}db=Object.assign({orgs:[],sets:[],meetings:[],attendees:[],artifacts:[],actions:[],footprint:[]},j||{})}
+function load(){let j=null;try{j=JSON.parse(localStorage.getItem(DB_KEY))}catch(e){}db=Object.assign({orgs:[],sets:[],meetings:[],attendees:[],artifacts:[],actions:[],footprint:[],mail_threads:[],mail_messages:[]},j||{})}
 function persist(){try{localStorage.setItem(DB_KEY,JSON.stringify(db))}catch(e){throw new Error('브라우저 저장 공간이 부족해요. 설정에서 백업을 받고 오래된 세트를 정리하세요.')}}
 const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const need=(x,m)=>{if(!x)throw new Error(m);return x};
@@ -107,7 +109,7 @@ async function api(m,p,b={}){
       const s=need(db.sets.find(x=>x.id===id),'세트를 찾을 수 없어요'),mt=mtgOf(id),o=orgOf(s.org_id);
       out={set:{...mt,...s,meeting_id:mt.id,org_name:o.name,org_country:o.country},stages:ST,
         attendees:db.attendees.filter(a=>a.meeting_id===mt.id),artifacts:db.artifacts.filter(a=>a.meeting_id===mt.id),actions:db.actions.filter(a=>a.meeting_id===mt.id),
-        footprint:db.footprint.filter(f=>f.org_id===s.org_id).sort((x,y)=>(y.occurred_on||'').localeCompare(x.occurred_on||''))};
+        footprint:db.footprint.filter(f=>f.org_id===s.org_id).sort((x,y)=>(y.occurred_on||'').localeCompare(x.occurred_on||'')),mail_threads:db.mail_threads.filter(t=>t.meeting_id===mt.id),mail_messages:db.mail_messages.filter(x=>x.meeting_id===mt.id).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''))};
     }else if(m==='POST'){
       if(db.sets.some(x=>x.id===b.id))throw new Error('이미 있는 세트 ID예요: '+b.id);
       let oid=b.org_id;
@@ -138,13 +140,29 @@ async function api(m,p,b={}){
   }else if(r==='artifacts'){
     if(m==='POST'){db.artifacts.push({id:uid('art_'),meeting_id:b.meeting_id,kind:b.kind,version:1,lang:b.lang||'ko',title:b.title||'',body:b.body||'',status:'draft'});adv(b.meeting_id,b.kind)}
     else{
-      const a=need(db.artifacts.find(x=>x.id===id),'산출물을 찾을 수 없어요');
+      const a=need(db.artifacts.find(x=>x.id===id),'아웃풋을 찾을 수 없어요');
       if(m==='PATCH'){setF(a,b,['title','body','status','lang','version']);adv(a.meeting_id,a.kind)}else del('artifacts',x=>x.id===id);
     }
   }else if(r==='actions'){
     if(m==='POST')db.actions.push({id:uid('act_'),meeting_id:b.meeting_id,category:b.category||'—',description:b.description,owner:b.owner||'TBD',due_on:b.due_on||'',status:'open'});
     else if(m==='PATCH')setF(need(db.actions.find(x=>x.id===id),'후속조치를 찾을 수 없어요'),b,['status','owner','due_on','category','description']);
     else del('actions',x=>x.id===id);
+  }else if(r==='mailthreads'){
+    if(m==='GET')out=db.mail_threads.filter(t=>t.meeting_id===b.meeting_id);
+    else if(m==='POST'){
+      const row={id:uid('thr_'),meeting_id:b.meeting_id,channel:b.channel||'teams',subject:b.subject||'',participants:b.participants||'',status:'open',created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+      db.mail_threads.push(row);out=row;
+    }else if(m==='PATCH'){
+      const row=need(db.mail_threads.find(t=>t.id===id),'메일 스레드를 찾을 수 없어요');setF(row,b,['subject','participants','status','channel']);row.updated_at=new Date().toISOString();out=row;
+    }else if(m==='DELETE'){
+      del('mail_messages',x=>x.thread_id===id);del('mail_threads',x=>x.id===id);
+    }
+  }else if(r==='mailmessages'){
+    if(m==='GET')out=db.mail_messages.filter(x=>x.thread_id===id);
+    else if(m==='POST'){
+      const row={id:uid('msg_'),thread_id:b.thread_id,meeting_id:b.meeting_id,direction:b.direction==='incoming'?'incoming':'outgoing',sender:b.sender||'',recipients:b.recipients||'',subject:b.subject||'',body:b.body||'',source:b.source||'manual',created_at:new Date().toISOString()};
+      db.mail_messages.push(row);const th=db.mail_threads.find(t=>t.id===row.thread_id);if(th){th.updated_at=row.created_at;th.status='open'}out=row;
+    }
   }else if(r==='footprint'){
     if(m==='POST')db.footprint.push({id:uid('fp_'),org_id:b.org_id,meeting_id:b.meeting_id,occurred_on:b.occurred_on||new Date().toISOString().slice(0,10),title:b.title||'',one_liner:b.one_liner});
     else del('footprint',x=>x.id===id);
@@ -155,7 +173,7 @@ async function api(m,p,b={}){
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(toast.h);toast.h=setTimeout(()=>t.className='',err?5000:2200)}
 async function run(fn){$('#busy').className='on';try{const m=await fn();if(m)toast(m)}catch(e){toast(e.message,1)}finally{$('#busy').className=''}}
 async function loadSets(){sets=await api('GET','/api/sets');renderRail()}
-async function openSet(id){if(cur!==id)mail={sub:'',body:'',kind:'agenda',lang:'ko'};cur=id;D=await api('GET','/api/sets/'+encodeURIComponent(id));render()}
+async function openSet(id){if(cur!==id)mail={sub:'',body:'',kind:'agenda',lang:'ko'},teams={channel:'teams',subject:'',to:'',from:'',body:'',threadId:''};cur=id;D=await api('GET','/api/sets/'+encodeURIComponent(id));render()}
 const reload=async()=>{await loadSets();if(cur)await openSet(cur)};
 async function route(){const id=decodeURIComponent(location.hash.slice(2));if(id==='insight'){cur=null;D=null;renderInsight()}else if(id)await openSet(id);else{cur=null;D=null;render()}}
 addEventListener('hashchange',()=>run(route));
@@ -171,7 +189,7 @@ function render(){
   renderRail();
   if(!D){main.innerHTML='<div class="empty"><h3>회의 세트를 선택하세요</h3><p>왼쪽 목록에서 세트를 고르거나, 새 세트를 만들어 시작하세요.</p></div>';return}
   const s=D.set;
-  const tabs=[['info','개요'],['art',`산출물 ${D.artifacts.length}`],['act',`후속조치 ${D.actions.length}`],['mail','메일 발송'],['fp','발자취']];
+  const tabs=[['info','개요'],['art',`아웃풋 ${D.artifacts.length}`],['act',`후속조치 ${D.actions.length}`],['mail','메일 발송'],['fp','발자취']];
   main.innerHTML=`<div class="top"><div><h2>${esc(s.code)} ${esc(s.title||'')}</h2><p>${esc(s.org_name)}${s.org_country?' ('+esc(s.org_country)+')':''}</p></div><button class="btn sm danger" data-a="delset">세트 삭제</button></div>
   <ol class="steps">${D.stages.map(x=>`<li class="${x.n<s.stage?'done':''} ${x.n==s.stage?'cur':''} ${x.gate?'gate':''}"><button class="step" data-a="stage" data-n="${x.n}" ${x.n==8?'disabled':''} title="${esc(x.desc)}"><b>${x.n}</b>${esc(x.label)}</button></li>`).join('')}</ol>
   ${s.stage===7?`<div class="seal"><div><b>대표 승인 대기</b><p>회의록, 아젠다, 발송 문안을 검토한 뒤 승인하면 참석자 배포 단계로 넘어가요.</p></div><input id="actor" value="${esc(cfg.actor)}" placeholder="승인자 이름"><button class="btn stamp" data-a="approve">승인하기</button></div>`:''}
@@ -197,8 +215,8 @@ function paneArt(){
   <details class="src" open><summary>회의 음성·PDF를 전사하고 회의록으로 정리하기</summary><input type="file" id="src-file" accept="audio/*,.m4a,.mp3,.wav,.pdf,.txt,.md"><p class="hint">음성(m4a, mp3, wav 등)이나 PDF(스캔·손글씨 포함)를 올리면 그대로 전사해 전사본으로 저장하고, 이어서 회의록으로 정리해요. 파일은 14MB까지 가능해요.</p><textarea id="src" rows="5" placeholder="파일 대신 회의 메모나 전사 내용을 붙여 넣어도 돼요"></textarea><div class="row" style="margin-top:8px"><button class="btn pri" data-a="aifile">전사하고 회의록 정리</button></div></details>
   ${D.artifacts.map(a=>`<details class="art" data-id="${a.id}" data-kind="${a.kind}"><summary>${esc(KIND[a.kind]||a.kind)} v${a.version}<span class="tag ${a.status}">${a.status==='approved'?'승인됨':'초안'}</span> ${esc(a.title||'')}</summary><div class="in">
   <label>제목<input class="a-t" value="${esc(a.title)}"></label><label>내용<textarea class="a-b" rows="12">${esc(a.body)}</textarea></label>
-  <div class="row"><button class="btn pri" data-a="asave">저장</button><button class="btn" data-a="apolish">AI로 다듬기</button>${a.kind==='agenda'||a.kind==='minutes'?'<button class="btn" data-a="acomp">AI로 초안 완성</button>':''}<select class="a-l">${langs.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join('')}</select><button class="btn" data-a="atr">번역본 저장</button><button class="btn danger" data-a="adel">삭제</button></div></div></details>`).join('')||'<p class="empty">아직 산출물이 없어요. 위 버튼으로 AI 초안을 만들거나 아래에서 직접 추가하세요.</p>'}
-  <details class="art"><summary>산출물 직접 추가</summary><div class="in"><label>종류<select id="n-kind">${Object.entries(KIND).map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></label>${fld('n-title','제목','')}<label>내용<textarea id="n-body" rows="6"></textarea></label><button class="btn pri" data-a="newart">추가</button></div></details>`;
+  <div class="row"><button class="btn pri" data-a="asave">저장</button><button class="btn" data-a="apolish">AI로 다듬기</button>${a.kind==='agenda'||a.kind==='minutes'?'<button class="btn" data-a="acomp">AI로 초안 완성</button>':''}<select class="a-l">${langs.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join('')}</select><button class="btn" data-a="atr">번역본 저장</button><button class="btn" data-a="toTeams" data-id="${a.id}">Teams 메일로 보내기</button><button class="btn danger" data-a="adel">삭제</button></div></div></details>`).join('')||'<p class="empty">아직 아웃풋이 없어요. 위 버튼으로 AI 초안을 만들거나 아래에서 직접 추가하세요.</p>'}
+  <details class="art"><summary>아웃풋 직접 추가</summary><div class="in"><label>종류<select id="n-kind">${Object.entries(KIND).map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></label>${fld('n-title','제목','')}<label>내용<textarea id="n-body" rows="6"></textarea></label><button class="btn pri" data-a="newart">추가</button></div></details>`;
 }
 function paneAct(){
   return `${D.actions.map(a=>`<div class="item"><div><b>${esc(a.description)}</b><br><small>${esc(a.category)}, 담당 ${esc(a.owner)}${a.due_on?', 기한 '+esc(a.due_on):''}</small></div><button class="btn sm" data-a="acttog" data-id="${a.id}" data-s="${a.status==='done'?'open':'done'}">${a.status==='done'?'완료됨(되돌리기)':'완료 처리'}</button><button class="btn sm danger" data-a="actdel" data-id="${a.id}">삭제</button></div>`).join('')||'<p class="empty">등록된 후속조치가 없어요.</p>'}
@@ -249,7 +267,7 @@ async function saveArt({kind,title,body,lang,ex}){
   return api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind,title,body,lang:lang||'ko'});
 }
 const copy=t=>navigator.clipboard.writeText(t).catch(()=>{});
-document.addEventListener('input',e=>{const k={'mk-sub':'sub','mk-body':'body','mk-kind':'kind','mk-lang':'lang'}[e.target.id];if(k)mail[k]=e.target.value});
+document.addEventListener('input',e=>{const k={'mk-sub':'sub','mk-body':'body','mk-kind':'kind','mk-lang':'lang'}[e.target.id];if(k)mail[k]=e.target.value;const tk={'tm-channel':'channel','tm-sub':'subject','tm-to':'to','tm-from':'from','tm-body':'body'}[e.target.id];if(tk)teams[tk]=e.target.value});
 async function filePart(f){
   if(f.type.startsWith('text/')||/\.(txt|md)$/i.test(f.name))return{text:await f.text()};
   const ext=(f.name.split('.').pop()||'').toLowerCase(),mm={m4a:'audio/mp4',mp3:'audio/mpeg',wav:'audio/wav',aac:'audio/aac',ogg:'audio/ogg',flac:'audio/flac',pdf:'application/pdf'},mime=mm[ext]||f.type;
@@ -270,14 +288,22 @@ function mailReady(name){
 async function logMail(rs,su,body){await api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind:'email',title:'발송: '+su,body:'수신: '+rs.map(r=>r.e).join(', ')+'\n\n'+body});await openSet(cur)}
 function paneMail(){
   const em=D.attendees.filter(a=>a.email),op=(a,cur)=>a.map(x=>`<option value="${x[0]}" ${x[0]===cur?'selected':''}>${x[1]}</option>`).join('');
+  const threads=D.mail_threads||[],messages=D.mail_messages||[];
+  const threadHtml=threads.map(t=>{const ms=messages.filter(x=>x.thread_id===t.id);return `<details class="mail-thread"><summary><b>${esc(t.subject||'(제목 없음)')}</b> <small>${t.channel==='teams'?'Teams':'Outlook'} · ${ms.length}개 메시지</small></summary><div class="thread-body">${ms.map(x=>`<div class="mail-msg ${x.direction}"><b>${x.direction==='incoming'?'받음':'보냄'} · ${esc(x.sender||'미상')}</b><small>${esc(x.created_at||'')}</small><p>${esc(x.body||'')}</p></div>`).join('')||'<p class="hint">아직 메시지가 없습니다.</p>'}</div></details>`}).join('')||'<p class="empty">아직 메일 스레드가 없습니다. 아래에서 첫 메시지를 작성하세요.</p>';
   return `<h3>수신자</h3>${em.length?`<div class="row" style="margin-bottom:8px"><button class="btn sm" data-a="mailall" data-m="all">전체 선택</button><button class="btn sm" data-a="mailall" data-m="partner">상대측만</button><button class="btn sm" data-a="mailall" data-m="none">해제</button></div>`+em.map(a=>`<label class="chk"><input type="checkbox" class="rc" data-e="${esc(a.email)}" data-n="${esc(a.name)}" data-side="${a.side}" checked>${esc(a.name)} <small>${esc(a.email)}, ${a.side==='korea'?'우리측':'상대측'}</small></label>`).join(''):'<p class="empty">이메일이 있는 참석자가 없어요. 개요 탭에서 참석자를 추가하거나 명단을 붙여 넣으세요.</p>'}
   <h3 style="margin-top:18px">메일 작성</h3>
   <div class="row"><select id="mk-kind">${op([['agenda','아젠다 발송'],['schedule','일정 조율 제안'],['notice','일정 확정·재공지(접속 링크)'],['minutes','회의록 전달·확인 요청'],['followup','후속조치 확인 요청']],mail.kind)}</select><select id="mk-lang">${op([['ko','한국어'],['en','English']],mail.lang)}</select></div>
   <div class="row" style="margin:8px 0"><input id="mk-ins" placeholder="AI에게 줄 추가 지시 (선택)"><button class="btn" data-a="aimail">AI로 작성</button></div>
   ${fld('mk-sub','제목',mail.sub)}<label>본문 ({이름}은 받는 사람 이름으로 바뀌어요)<textarea id="mk-body" rows="12">${esc(mail.body)}</textarea></label>
   <div class="row"><button class="btn pri" data-a="gmail">Gmail로 열기 (전원 숨은참조)</button><button class="btn" data-a="mailto">메일 앱으로 열기</button><button class="btn" data-a="mailcopy">수신자·본문 복사</button></div>
-  <p class="hint">브라우저에서 바로 발송하는 게 아니라 작성창을 열어 줘요. 첨부 파일은 작성창에서 붙이세요. 위 세 버튼을 누를 때마다 발송 기록이 산출물에 저장돼요.</p>
-  ${em.length?`<h3 style="margin-top:18px">개인별 보내기</h3>`+em.map(a=>`<div class="item"><div>${esc(a.name)} <small>${esc(a.email)}</small></div><button class="btn sm" data-a="mailone" data-e="${esc(a.email)}" data-n="${esc(a.name)}">이 사람에게 열기</button></div>`).join(''):''}`;
+  <p class="hint">브라우저에서 바로 발송하는 게 아니라 작성창을 열어 줘요. 첨부 파일은 작성창에서 붙이세요. 위 세 버튼을 누를 때마다 발송 기록이 아웃풋에 저장돼요.</p>
+  ${em.length?`<h3 style="margin-top:18px">개인별 보내기</h3>`+em.map(a=>`<div class="item"><div>${esc(a.name)} <small>${esc(a.email)}</small></div><button class="btn sm" data-a="mailone" data-e="${esc(a.email)}" data-n="${esc(a.name)}">이 사람에게 열기</button></div>`).join(''):''}
+  <details class="teams-box" open><summary><b>Teams / Outlook 메일 교환</b></summary><p class="hint">아웃풋·회의록을 스레드 단위로 보내고, 받은 회신을 같은 회담 기록에 쌓는 구조입니다. 현재 정적 HTML에서는 실제 자동 송수신 대신 보내기·받은 메일 붙여넣기 방식으로 저장합니다.</p>
+  <div class="row"><select id="tm-channel"><option value="teams" ${teams.channel==='teams'?'selected':''}>Teams 채널</option><option value="outlook" ${teams.channel==='outlook'?'selected':''}>Outlook 메일</option></select><input id="tm-from" value="${esc(teams.from)}" placeholder="보내는 사람 / 회신 보낸 사람"><input id="tm-to" value="${esc(teams.to)}" placeholder="받는 사람 또는 Teams 채널 이메일"></div>
+  ${fld('tm-sub','스레드 제목',teams.subject||mail.sub)}<label>메시지<textarea id="tm-body" rows="8" placeholder="보낼 메시지를 작성하거나 받은 메일을 붙여 넣으세요">${esc(teams.body)}</textarea></label>
+  <div class="row"><button class="btn pri" data-a="tmSend">발신 메시지 저장</button><button class="btn" data-a="tmReceive">받은 메일 저장</button><button class="btn" data-a="tmOpen">Outlook 작성창 열기</button></div>
+  <p class="hint">받은 메일은 본문을 붙여 넣고 ‘받은 메일 저장’을 누르면 회의별 스레드에 보관됩니다. 실제 Teams 채널 메일 자동 연동은 Microsoft Graph·Webhook·Cloudflare Worker 연결이 필요합니다.</p>
+  <h4>메일 스레드</h4>${threadHtml}</details>`;
 }
 function renderInsight(){
   renderRail();
@@ -303,7 +329,7 @@ const H={
     if(oid)b.org_id=oid;else{if(!v('n-orgname'))throw new Error('기관명을 입력하세요');b.org_name=v('n-orgname')}
     await api('POST','/api/sets',b);dlg.close();await loadSets();location.hash='#/'+encodeURIComponent(id);return '세트를 만들었어요';
   },
-  async delset(){if(!confirm('이 세트와 딸린 산출물, 후속조치를 모두 삭제할까요?'))return;await api('DELETE','/api/sets/'+cur);location.hash='';cur=null;D=null;await loadSets();render();return '세트를 삭제했어요'},
+  async delset(){if(!confirm('이 세트와 딸린 아웃풋, 후속조치를 모두 삭제할까요?'))return;await api('DELETE','/api/sets/'+cur);location.hash='';cur=null;D=null;await loadSets();render();return '세트를 삭제했어요'},
   tab(t){tab=t.dataset.t;render()},
   async stage(t){await api('PATCH','/api/meetings/'+D.set.meeting_id,{stage:+t.dataset.n});await reload();return '단계를 바꿨어요'},
   async approve(){
@@ -384,6 +410,20 @@ const H={
     ta.value=await gem(`아래 글을 다음 지시에 맞게 다듬으세요. 사실을 바꾸거나 새로 지어내지 말고, 결과 글만 출력하세요.\n\n[지시]\n${ins}\n\n[글]\n${ta.value}`,.3);
     return '다듬은 결과를 내용 칸에 넣었어요. 저장을 눌러야 반영돼요';
   },
+  async toTeams(t,d){const a=D.artifacts.find(x=>x.id===d.dataset.id);if(!a)throw new Error('아웃풋을 찾을 수 없어요');teams.subject=a.title||KIND[a.kind]||'아웃풋';teams.body=a.body||'';tab='mail';render();return '아웃풋을 Teams 메일 작성창에 넣었어요'},
+  async tmSend(){
+    const subject=(teams.subject||'').trim(),body=(teams.body||'').trim();if(!subject||!body)throw new Error('스레드 제목과 메시지를 입력하세요');
+    let th=(D.mail_threads||[]).find(x=>x.id===teams.threadId)||D.mail_threads.find(x=>x.subject===subject&&x.channel===teams.channel);
+    if(!th){const r=await api('POST','/api/mailthreads',{meeting_id:D.set.meeting_id,channel:teams.channel,subject,participants:teams.to});th=r;teams.threadId=r.id}
+    await api('POST','/api/mailmessages',{thread_id:th.id,meeting_id:D.set.meeting_id,direction:'outgoing',sender:teams.from||'우리측',recipients:teams.to,subject,body,source:'manual-compose'});await openSet(cur);return '발신 메시지를 회담 메일 스레드에 저장했어요';
+  },
+  async tmReceive(){
+    const subject=(teams.subject||'').trim(),body=(teams.body||'').trim();if(!subject||!body)throw new Error('받은 메일의 제목과 본문을 입력하세요');
+    let th=(D.mail_threads||[]).find(x=>x.id===teams.threadId)||D.mail_threads.find(x=>x.subject===subject&&x.channel===teams.channel);
+    if(!th){const r=await api('POST','/api/mailthreads',{meeting_id:D.set.meeting_id,channel:teams.channel,subject,participants:teams.from});th=r;teams.threadId=r.id}
+    await api('POST','/api/mailmessages',{thread_id:th.id,meeting_id:D.set.meeting_id,direction:'incoming',sender:teams.from||'상대 기관',recipients:teams.to,subject,body,source:'manual-import'});await openSet(cur);return '받은 메일을 회담 메일 스레드에 저장했어요';
+  },
+  tmOpen(){const subject=teams.subject||mail.sub,body=teams.body||mail.body,to=teams.to||rcs().map(x=>x.e).join(',');const url=`https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;window.open(url,'_blank');return 'Outlook 작성창을 열었어요'},
   async aimail(){
     const s=D.set,k=v('mk-kind'),lang=v('mk-lang')==='en'?'English':'한국어',ins=v('mk-ins');
     const pick=kd=>(D.artifacts.filter(a=>a.kind===kd&&(a.body||'').trim()).slice(-1)[0]||{}).body||'';
@@ -441,8 +481,8 @@ const H={
     const body=await gem(`다음 텍스트를 ${name}로 번역하세요. 외교/공식 문서 어조를 유지하고, 번역 결과만 출력하세요 (설명이나 원문 반복 금지).\n\n---\n${text}`,.2);
     await saveArt({kind:d.dataset.kind,title:`${d.querySelector('.a-t').value||'문서'} (${name} 번역)`,body,lang:sel.value});await openSet(cur);return '번역본을 저장했어요';
   },
-  async adel(t,d){if(!confirm('이 산출물을 삭제할까요?'))return;await api('DELETE','/api/artifacts/'+d.dataset.id);await openSet(cur);return '삭제했어요'},
-  async newart(){await api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind:v('n-kind'),title:v('n-title'),body:$('#n-body').value});await reload();return '산출물을 추가했어요'},
+  async adel(t,d){if(!confirm('이 아웃풋을 삭제할까요?'))return;await api('DELETE','/api/artifacts/'+d.dataset.id);await openSet(cur);return '삭제했어요'},
+  async newart(){await api('POST','/api/artifacts',{meeting_id:D.set.meeting_id,kind:v('n-kind'),title:v('n-title'),body:$('#n-body').value});await reload();return '아웃풋을 추가했어요'},
   async actadd(){
     if(!v('x-desc'))throw new Error('후속조치 내용을 입력하세요');
     await api('POST','/api/actions',{meeting_id:D.set.meeting_id,category:v('x-cat')||undefined,description:v('x-desc'),owner:v('x-owner')||undefined,due_on:v('x-due')||undefined});await reload();return '후속조치를 추가했어요';
